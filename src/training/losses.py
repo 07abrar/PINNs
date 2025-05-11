@@ -18,7 +18,7 @@ class Losses(nn.Module):
         super(Losses, self).__init__()
         self.model = model
         self.device = device
-        self.mse_loss_fn = nn.MSELoss(reduction=reduction)
+        self.loss_function = nn.MSELoss(reduction=reduction)
 
     def boundary_loss(self, X_train_Nu, U_train_Nu) -> torch.Tensor:
         """
@@ -31,8 +31,8 @@ class Losses(nn.Module):
         Returns:
             torch.Tensor: Boundary loss
         """
-        predicted_u = self.model(X_train_Nu)
-        return self.mse_loss_fn(predicted_u, U_train_Nu)
+        predicted_u = self.model.forward(X_train_Nu)
+        return self.loss_function(predicted_u, U_train_Nu)
 
     def compute_p_laplacian(self, u, x, p):
         """
