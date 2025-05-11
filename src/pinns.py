@@ -54,14 +54,49 @@ class PINN(nn.Module):
             **opt_kwargs
         )
 
-    def train(self, mode = True):
+    def __call__(
+        self,
+        X_train_Nu: torch.Tensor,
+        U_train_Nu: torch.Tensor,
+        X_train_Nf: torch.Tensor,
+        p: float = 2.0,
+        bc_weight: float = 10.0
+    ) -> torch.Tensor:
+        """
+        Perform one training step and evaluation:
+        - switch to train mode
+        - zero gradients
+        - compute total loss
+        - backpropagate
+        - optimizer step
+        - switch to eval mode
+        Returns:
+            loss (torch.Tensor): training loss tensor
+            test_loss (torch.Tensor): boundary loss tensor
+        """
+        self.train()
+        self.zero_grad()
+        loss = self.compute_loss(X_train_Nu, U_train_Nu, X_train_Nf, p, bc_weight)
+        self.loss_backward(loss)
+        self.step()
+        self.eval()
+        return loss
+
+    def train(self, mode: bool = True):
         return super().train(mode)
     
     def zero_grad(self):
         """Clear gradients via the wrapped optimizer."""
         self.optimizer.zero_grad()
 
-    def compute_loss(self, X_train_Nu, U_train_Nu, X_train_Nf, p=2.0, bc_weight=10.0):
+    def compute_loss(
+        self,
+        X_train_Nu: torch.Tensor,
+        U_train_Nu: torch.Tensor,
+        X_train_Nf: torch.Tensor,
+        p: float = 2.0,
+        bc_weight: float = 10.0
+    ) -> torch.Tensor:
         """
         Compute the total loss for the PINN using the Losses class and perform backpropagation.
 
@@ -72,8 +107,7 @@ class PINN(nn.Module):
             p (float, optional): p-value for the p-Laplacian. Default is 2.0.
             bc_weight (float, optional): Weight for the boundary condition loss. Default is 10.0.
         """
-
-        loss = self.loss_calculator.total_loss(
+        return self.loss_calculator.total_loss(
             X_train_Nu=X_train_Nu,
             U_train_Nu=U_train_Nu,
             X_train_Nf=X_train_Nf,
@@ -81,6 +115,12 @@ class PINN(nn.Module):
             bc_weight=bc_weight,
         )
         
+    def loss_backward(self, loss: torch.Tensor):
+        """
+        Backpropagate the loss.
+        Args:
+            loss (torch.Tensor): The loss tensor to backpropagate.
+        """
         loss.backward()
     
     def step(self, closure=None):
@@ -111,7 +151,6 @@ class PINN(nn.Module):
             'pde_loss': pde_loss.item()
         }
 
-    
     def forward(self, x):
         """
         Forward pass through the PINN.
