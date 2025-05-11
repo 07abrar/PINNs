@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from .networks import NeuralNet
-from src.training.losses import Losses
+from src import NeuralNet, Losses
 
 class PINN(nn.Module):
     """
