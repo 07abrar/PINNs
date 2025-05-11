@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from src import NeuralNet, Losses
-from src.physics.boundary_and_collocation_points import TrainingDataGenerator
-from src.training.optimizer import Optimizer
+
+from src import NeuralNet, Losses, TrainingDataGenerator, Optimizer
+
 
 class PINN(nn.Module):
     """
