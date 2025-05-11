@@ -6,7 +6,7 @@ class Losses(nn.Module):
     """
     A class to compute loss functions for training PINNs.
     """
-    def __init__(self, model, device, reduction='mean'):
+    def __init__(self, model, device, reduction='mean') -> None:
         """
         Initialize the loss functions.
 
@@ -20,7 +20,7 @@ class Losses(nn.Module):
         self.device = device
         self.mse_loss_fn = nn.MSELoss(reduction=reduction)
 
-    def boundary_loss(self, X_train_Nu, U_train_Nu):
+    def boundary_loss(self, X_train_Nu, U_train_Nu) -> torch.Tensor:
         """
         Calculate loss at boundary points.
 
