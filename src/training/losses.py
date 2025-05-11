@@ -6,7 +6,7 @@ class Losses(nn.Module):
     """
     A class to compute loss functions for training PINNs.
     """
-    def __init__(self, model, device, reduction='mean') -> None:
+    def __init__(self, model: torch.nn.Module, device='cpu', reduction='mean') -> None:
         """
         Initialize the loss functions.
 
