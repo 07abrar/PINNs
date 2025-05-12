@@ -7,10 +7,10 @@ class Optimizer:
     Class for configuring and managing optimizers for training PINNs.
     """
     def __init__(
-        self, 
-        model: torch.nn.Module, 
-        optimizer_type="adam", 
-        lr=0.001, 
+        self,
+        model: torch.nn.Module,
+        optimizer_type="adam",
+        lr=0.001,
         weight_decay=1e-6,
         scheduler_type=None,
         **kwargs
@@ -29,31 +29,31 @@ class Optimizer:
         self.model = model
         self.optimizer_type = optimizer_type.lower()
         self.lr = lr
-        
+
         # Configure optimizer
         if self.optimizer_type == "adam":
             self.optimizer = optim.Adam(
-                model.parameters(), 
-                lr=lr, 
+                model.parameters(),
+                lr=lr,
                 weight_decay=weight_decay,
-                decoupled_weight_decay=True, 
+                decoupled_weight_decay=True,
                 amsgrad=True,
                 **kwargs
             )
         elif self.optimizer_type == "lbfgs":
             self.optimizer = optim.LBFGS(
-                model.parameters(), 
-                lr=lr, 
+                model.parameters(),
+                lr=lr,
                 **kwargs
             )
         else:
             raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
-        
+
         # Configure scheduler
         self.scheduler = None
         if scheduler_type:
             self._init_scheduler(scheduler_type, **kwargs)
-    
+
     def _init_scheduler(self, scheduler_type, **kwargs):
         """
         Initialize learning rate scheduler.
@@ -82,7 +82,7 @@ class Optimizer:
                 T_max=kwargs.get('T_max', 100),
                 eta_min=kwargs.get('eta_min', 0)
             )
-    
+
     def step(self, closure=None):
         """
         Perform a single optimization step.
@@ -93,18 +93,18 @@ class Optimizer:
         """
         if self.optimizer_type == "lbfgs" and closure is None:
             raise ValueError("LBFGS optimizer requires a closure function")
-        
+
         if self.optimizer_type == "lbfgs":
             return self.optimizer.step(closure)
         else:
             self.optimizer.step()
-    
+
     def zero_grad(self):
         """
         Clear the gradients of all optimized parameters.
         """
         self.optimizer.zero_grad()
-    
+
     def scheduler_step(self, metric=None):
         """
         Step the learning rate scheduler.
@@ -114,14 +114,14 @@ class Optimizer:
         """
         if self.scheduler is None:
             return
-        
+
         if isinstance(self.scheduler, ReduceLROnPlateau):
             if metric is None:
                 raise ValueError("ReduceLROnPlateau scheduler requires a metric value")
             self.scheduler.step(metric)
         else:
             self.scheduler.step()
-    
+
     def get_lr(self):
         """
         Get current learning rate.

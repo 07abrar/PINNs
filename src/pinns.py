@@ -10,12 +10,12 @@ class PINN(nn.Module):
     This class encapsulates the neural network from NeuralNet and the loss functions from Losses.
     """
     def __init__(
-        self, 
+        self,
         # Args for the neural network
-        input_dim: int, 
-        hidden_dim: int, 
-        output_dim: int, 
-        num_hidden_layers: int, 
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_hidden_layers: int,
         activation: str = "tanh",
         device: str = "cpu",
         # Args for training data distribution
@@ -84,7 +84,7 @@ class PINN(nn.Module):
 
     def train(self, mode: bool = True):
         return super().train(mode)
-    
+
     def zero_grad(self):
         """Clear gradients via the wrapped optimizer."""
         self.optimizer.zero_grad()
@@ -114,7 +114,7 @@ class PINN(nn.Module):
             p=p,
             bc_weight=bc_weight,
         )
-        
+
     def loss_backward(self, loss: torch.Tensor):
         """
         Backpropagate the loss.
@@ -122,11 +122,11 @@ class PINN(nn.Module):
             loss (torch.Tensor): The loss tensor to backpropagate.
         """
         loss.backward()
-    
+
     def step(self, closure=None):
         """Perform an optimizer step (supports LBFGS closure)."""
         self.optimizer.step(closure)
-    
+
     def eval(self):
         return super().eval()
 
@@ -145,7 +145,7 @@ class PINN(nn.Module):
         """
         boundary_loss = self.loss_calculator.boundary_loss(X_train_Nu, U_train_Nu)
         pde_loss = self.loss_calculator.pde_loss(X_train_Nf, p)
-        
+
         return {
             'boundary_loss': boundary_loss.item(),
             'pde_loss': pde_loss.item()
