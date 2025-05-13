@@ -48,7 +48,7 @@ class Losses(nn.Module):
         """
         # Compute first derivatives (gradients)
         u_grad = autograd.grad(
-            u, x, 
+            u, x,
             grad_outputs=torch.ones_like(u).to(self.device),
             retain_graph=True, create_graph=True
         )[0]
@@ -79,7 +79,7 @@ class Losses(nn.Module):
         # Return the full p-Laplacian
         return div_x + div_y
 
-    def pde_loss(self, X_train_Nf, p):
+    def pde_loss(self, X_train_Nf, p, device='cpu'):
         """
         Calculate the PDE residual loss for the p-Laplacian equation.
 
@@ -90,21 +90,43 @@ class Losses(nn.Module):
         Returns:
             torch.Tensor: PDE residual loss
         """
-        # Create a copy with gradient tracking
-        x = X_train_Nf.clone()
-        x.requires_grad = True
+        # # Create a copy with gradient tracking
+        # x = X_train_Nf.clone()
+        # x.requires_grad = True
 
-        # Forward pass
-        u = self.model(x)
+        # # Forward pass
+        # u = self.model(x)
 
-        # Compute p-Laplacian
-        p_laplacian = self.compute_p_laplacian(u, x, p)
+        # # Compute p-Laplacian
+        # p_laplacian = self.compute_p_laplacian(u, x, p)
 
-        # PDE: -div(|∇u|^(p-2)∇u) = 1
-        residual = -p_laplacian - 1.0
+        # # PDE: -div(|∇u|^(p-2)∇u) = 1
+        # residual = -p_laplacian - 1.0
 
-        # Zero residual is the target
-        return torch.mean(residual**2)
+        # # Zero residual is the target
+        # return torch.mean(residual**2)
+        f_hat = torch.zeros(X_train_Nf.shape[0],1, dtype=torch.float).to(device)
+        g = X_train_Nf.clone()
+        g.requires_grad = True
+        u = self.model.forward(g)
+        u_x_y = autograd.grad(u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
+        u_x = u_x_y[:,[0]]
+        u_y = u_x_y[:,[1]]
+        u_xx = autograd.grad(u_x,g,grad_outputs=torch.ones_like(u_x).to(device),create_graph=True)[0]
+        u_yy = autograd.grad(u_y,g,grad_outputs=torch.ones_like(u_y).to(device),create_graph=True)[0]
+        #\left [ \left ( \frac{\partial u}{\partial x} \right )^2+\left ( \frac{\partial u}{\partial y} \right )^2 \right ]^{p-2}
+        p = p
+        lapla_u_pmin2 = torch.sqrt(u_x**2+u_y**2)**(p-2)
+        x_lapla_u = lapla_u_pmin2*u_x
+        y_lapla_u = lapla_u_pmin2*u_y
+        delta_p_u_x = autograd.grad(x_lapla_u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
+        delta_p_u_x_x = delta_p_u_x[:,[0]]
+        delta_p_u_y = autograd.grad(y_lapla_u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
+        delta_p_u_y_y = delta_p_u_y[:,[1]]
+        delta_p_u = delta_p_u_x_x + delta_p_u_y_y
+        f = -delta_p_u - 1
+        loss_f = self.loss_function(f,f_hat)
+        return loss_f
 
     def total_loss(self, X_train_Nu, U_train_Nu, X_train_Nf, p, bc_weight=10.0):
         """

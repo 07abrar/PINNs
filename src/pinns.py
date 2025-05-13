@@ -56,10 +56,7 @@ class PINN(nn.Module):
 
     def __call__(
         self,
-        X_train_Nu: torch.Tensor,
-        U_train_Nu: torch.Tensor,
-        X_train_Nf: torch.Tensor,
-        p: float = 2.0,
+        p: float = 2.0, #p-value for the p-Laplacian
         bc_weight: float = 10.0
     ) -> torch.Tensor:
         """
@@ -76,7 +73,13 @@ class PINN(nn.Module):
         """
         self.train()
         self.zero_grad()
-        loss = self.compute_loss(X_train_Nu, U_train_Nu, X_train_Nf, p, bc_weight)
+        loss = self.compute_loss(
+            self.X_train_Nu,
+            self.U_train_Nu,
+            self.X_train_Nf,
+            p,
+            bc_weight
+        )
         self.loss_backward(loss)
         self.step()
         self.eval()
