@@ -6,21 +6,45 @@ class Losses(nn.Module):
     """
     A class to compute loss functions for training PINNs.
     """
-    def __init__(self, model: torch.nn.Module, device='cpu', reduction='mean') -> None:
+    def __init__(self,
+        pde_residual: callable,
+        model: torch.nn.Module,
+        device='cpu',
+        reduction='mean') -> None:
         """
         Initialize the loss functions.
 
         Args:
+            pde_residual (callable): The PDE residual function
             model: The neural network model
             device: Torch device (cpu or cuda)
             reduction (str): Specifies the reduction to apply to the output ('mean' or 'sum')
         """
         super(Losses, self).__init__()
+        self.pde_residual = pde_residual
         self.model = model
         self.device = device
         self.loss_function = nn.MSELoss(reduction=reduction)
 
-    def boundary_loss(self, X_train_Nu, U_train_Nu) -> torch.Tensor:
+    def total_loss(self, x_train_Nu, u_train_Nu, x_train_Nf, bc_weight=10.0):
+        """
+        Calculate the total loss as a weighted sum of boundary and PDE losses.
+
+        Args:
+            X_train_Nu (torch.Tensor): Boundary points
+            U_train_Nu (torch.Tensor): Boundary values
+            X_train_Nf (torch.Tensor): Collocation points
+            bc_weight (float): Weight for the boundary condition loss
+
+        Returns:
+            torch.Tensor: Total loss
+        """
+        loss_u = self.boundary_loss(x_train_Nu, u_train_Nu)
+        loss_f = self.pde_loss(x_train_Nf)
+
+        return bc_weight * loss_u + loss_f
+
+    def boundary_loss(self, x_train_Nu, u_train_Nu) -> torch.Tensor:
         """
         Calculate loss at boundary points.
 
@@ -31,118 +55,26 @@ class Losses(nn.Module):
         Returns:
             torch.Tensor: Boundary loss
         """
-        predicted_u = self.model.forward(X_train_Nu)
-        return self.loss_function(predicted_u, U_train_Nu)
+        predicted_u = self.model.forward(x_train_Nu)
+        return self.loss_function(predicted_u, u_train_Nu)
 
-    def compute_p_laplacian(self, u, x, p):
+    def pde_loss(self, x_train_Nf, device='cpu') -> torch.Tensor:
         """
-        Compute the p-Laplacian operator: div(|∇u|^(p-2)∇u)
-
-        Args:
-            u (torch.Tensor): Model output
-            x (torch.Tensor): Input coordinates
-            p (float): p-value for the p-Laplacian
-
-        Returns:
-            torch.Tensor: The p-Laplacian of u
-        """
-        # Compute first derivatives (gradients)
-        u_grad = autograd.grad(
-            u, x,
-            grad_outputs=torch.ones_like(u).to(self.device),
-            retain_graph=True, create_graph=True
-        )[0]
-
-        u_x = u_grad[:, [0]]
-        u_y = u_grad[:, [1]]
-
-        # Compute |∇u|^(p-2)
-        grad_norm_pow = torch.sqrt(u_x**2 + u_y**2)**(p-2)
-
-        # Compute |∇u|^(p-2)∇u components
-        weighted_u_x = grad_norm_pow * u_x
-        weighted_u_y = grad_norm_pow * u_y
-
-        # Compute divergence of (|∇u|^(p-2)∇u)
-        div_x = autograd.grad(
-            weighted_u_x, x,
-            grad_outputs=torch.ones_like(u_x).to(self.device),
-            retain_graph=True, create_graph=True
-        )[0][:, [0]]
-
-        div_y = autograd.grad(
-            weighted_u_y, x,
-            grad_outputs=torch.ones_like(u_y).to(self.device),
-            retain_graph=True, create_graph=True
-        )[0][:, [1]]
-
-        # Return the full p-Laplacian
-        return div_x + div_y
-
-    def pde_loss(self, X_train_Nf, p, device='cpu'):
-        """
-        Calculate the PDE residual loss for the p-Laplacian equation.
+        Calculate the PDE residual loss.
+        This function computes the PDE residual loss from self.pde_residual with
+        respect to the collocation points.
+        The PDE residual is defined as the difference between the predicted
+        solution and the true solution.
 
         Args:
             X_train_Nf (torch.Tensor): Collocation points
-            p (float): p-value for the p-Laplacian
 
         Returns:
             torch.Tensor: PDE residual loss
         """
-        # # Create a copy with gradient tracking
-        # x = X_train_Nf.clone()
-        # x.requires_grad = True
-
-        # # Forward pass
-        # u = self.model(x)
-
-        # # Compute p-Laplacian
-        # p_laplacian = self.compute_p_laplacian(u, x, p)
-
-        # # PDE: -div(|∇u|^(p-2)∇u) = 1
-        # residual = -p_laplacian - 1.0
-
-        # # Zero residual is the target
-        # return torch.mean(residual**2)
-        f_hat = torch.zeros(X_train_Nf.shape[0],1, dtype=torch.float).to(device)
-        g = X_train_Nf.clone()
-        g.requires_grad = True
-        u = self.model.forward(g)
-        u_x_y = autograd.grad(u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
-        u_x = u_x_y[:,[0]]
-        u_y = u_x_y[:,[1]]
-        u_xx = autograd.grad(u_x,g,grad_outputs=torch.ones_like(u_x).to(device),create_graph=True)[0]
-        u_yy = autograd.grad(u_y,g,grad_outputs=torch.ones_like(u_y).to(device),create_graph=True)[0]
-        #\left [ \left ( \frac{\partial u}{\partial x} \right )^2+\left ( \frac{\partial u}{\partial y} \right )^2 \right ]^{p-2}
-        p = p
-        lapla_u_pmin2 = torch.sqrt(u_x**2+u_y**2)**(p-2)
-        x_lapla_u = lapla_u_pmin2*u_x
-        y_lapla_u = lapla_u_pmin2*u_y
-        delta_p_u_x = autograd.grad(x_lapla_u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
-        delta_p_u_x_x = delta_p_u_x[:,[0]]
-        delta_p_u_y = autograd.grad(y_lapla_u,g,grad_outputs=torch.ones_like(u).to(device),retain_graph=True,create_graph=True)[0]
-        delta_p_u_y_y = delta_p_u_y[:,[1]]
-        delta_p_u = delta_p_u_x_x + delta_p_u_y_y
-        f = -delta_p_u - 1
-        loss_f = self.loss_function(f,f_hat)
-        return loss_f
-
-    def total_loss(self, X_train_Nu, U_train_Nu, X_train_Nf, p, bc_weight=10.0):
-        """
-        Calculate the total loss as a weighted sum of boundary and PDE losses.
-
-        Args:
-            X_train_Nu (torch.Tensor): Boundary points
-            U_train_Nu (torch.Tensor): Boundary values
-            X_train_Nf (torch.Tensor): Collocation points
-            p (float): p-value for the p-Laplacian
-            bc_weight (float): Weight for the boundary condition loss
-
-        Returns:
-            torch.Tensor: Total loss
-        """
-        loss_u = self.boundary_loss(X_train_Nu, U_train_Nu)
-        loss_f = self.pde_loss(X_train_Nf, p)
-
-        return bc_weight * loss_u + loss_f
+        coords = torch.tensor(x_train_Nf, dtype=torch.float64, device=device)
+        coords.requires_grad_() # Enable gradient tracking for collocation points
+        u_pred = self.model.forward(coords)
+        residual_function = self.pde_residual(coords, u_pred)
+        true_solution = torch.zeros_like(u_pred, dtype=torch.float64).to(self.device)
+        return self.loss_function(residual_function, true_solution)

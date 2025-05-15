@@ -7,10 +7,13 @@ from src import NeuralNet, Losses, TrainingDataGenerator, Optimizer
 class PINN(nn.Module):
     """
     Physics-Informed Neural Network (PINN) class.
-    This class encapsulates the neural network from NeuralNet and the loss functions from Losses.
+    This class encapsulates the neural network from NeuralNet
+    and the loss functions from Losses.
     """
     def __init__(
         self,
+        #args for the PDE
+        pde_residual: callable,
         # Args for the neural network
         input_dim: int,
         hidden_dim: int,
@@ -28,21 +31,45 @@ class PINN(nn.Module):
         scheduler_type: str = None,
         **opt_kwargs
     ) -> None:
+        """
+        Initialize the PINN.
+        Args:
+            pde_residual (callable): The PDE residual function
+            input_dim (int): Input dimension of the neural network
+            hidden_dim (int): Hidden dimension of the neural network
+            output_dim (int): Output dimension of the neural network
+            num_hidden_layers (int): Number of hidden layers in the neural network
+            activation (str): Activation function for the neural network
+            device (str): Device to run the model on ('cpu' or 'cuda')
+            Nd (int): Number of boundary points
+            Nc (int): Number of collocation points
+            optimizer_type (str): Type of optimizer ('adam', 'lbfgs')
+            lr (float): Learning rate for the optimizer
+            weight_decay (float): Weight decay for regularization
+            scheduler_type (str, optional): Type of learning rate scheduler
+        """
         super(PINN, self).__init__()
+        self.pde_residual = pde_residual
         self.device = device
+
+        # Initialize the neural network
         self.model = NeuralNet(
             input_dim, hidden_dim, output_dim, num_hidden_layers, activation
         ).to(device)
 
         # Initialize the loss calculator
-        self.loss_calculator = Losses(model=self.model, device=device)
+        self.loss_calculator = Losses(
+            pde_residual=self.pde_residual,
+            model=self.model,
+            device=device
+        )
 
         # Initialize training data
         self.data_generator = TrainingDataGenerator(Nd=Nd, Nc=Nc)
         Xb, Ub, Xf = self.data_generator.generate_training_data()
-        self.X_train_Nu = torch.tensor(Xb, dtype=torch.float32, device=device)
-        self.U_train_Nu = torch.tensor(Ub, dtype=torch.float32, device=device)
-        self.X_train_Nf = torch.tensor(Xf, dtype=torch.float32, device=device)
+        self.x_train_Nu = torch.tensor(Xb, dtype=torch.float64, device=device)
+        self.u_train_Nu = torch.tensor(Ub, dtype=torch.float64, device=device)
+        self.x_train_Nf = torch.tensor(Xf, dtype=torch.float64, device=device)
 
         # Initialize optimizer
         self.optimizer = Optimizer(
@@ -56,7 +83,6 @@ class PINN(nn.Module):
 
     def __call__(
         self,
-        p: float = 2.0, #p-value for the p-Laplacian
         bc_weight: float = 10.0
     ) -> torch.Tensor:
         """
@@ -74,10 +100,9 @@ class PINN(nn.Module):
         self.train()
         self.zero_grad()
         loss = self.compute_loss(
-            self.X_train_Nu,
-            self.U_train_Nu,
-            self.X_train_Nf,
-            p,
+            self.x_train_Nu,
+            self.u_train_Nu,
+            self.x_train_Nf,
             bc_weight
         )
         self.loss_backward(loss)
@@ -94,10 +119,9 @@ class PINN(nn.Module):
 
     def compute_loss(
         self,
-        X_train_Nu: torch.Tensor,
-        U_train_Nu: torch.Tensor,
-        X_train_Nf: torch.Tensor,
-        p: float = 2.0,
+        x_train_Nu: torch.Tensor,
+        u_train_Nu: torch.Tensor,
+        x_train_Nf: torch.Tensor,
         bc_weight: float = 10.0
     ) -> torch.Tensor:
         """
@@ -107,14 +131,12 @@ class PINN(nn.Module):
             X_train_Nu (torch.Tensor): Boundary points.
             U_train_Nu (torch.Tensor): Boundary values.
             X_train_Nf (torch.Tensor): Collocation points.
-            p (float, optional): p-value for the p-Laplacian. Default is 2.0.
             bc_weight (float, optional): Weight for the boundary condition loss. Default is 10.0.
         """
         return self.loss_calculator.total_loss(
-            X_train_Nu=X_train_Nu,
-            U_train_Nu=U_train_Nu,
-            X_train_Nf=X_train_Nf,
-            p=p,
+            x_train_Nu=x_train_Nu,
+            u_train_Nu=u_train_Nu,
+            x_train_Nf=x_train_Nf,
             bc_weight=bc_weight,
         )
 
@@ -141,7 +163,6 @@ class PINN(nn.Module):
             X_train_Nu (torch.Tensor): Boundary points
             U_train_Nu (torch.Tensor): Boundary values
             X_train_Nf (torch.Tensor): Collocation points
-            p (float): p-value for the p-Laplacian
 
         Returns:
             dict: Dictionary containing individual loss components
