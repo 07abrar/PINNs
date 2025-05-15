@@ -67,9 +67,9 @@ class PINN(nn.Module):
         # Initialize training data
         self.data_generator = TrainingDataGenerator(Nd=Nd, Nc=Nc)
         Xb, Ub, Xf = self.data_generator.generate_training_data()
-        self.x_train_Nu = torch.tensor(Xb, dtype=torch.float32, device=device)
-        self.u_train_Nu = torch.tensor(Ub, dtype=torch.float32, device=device)
-        self.x_train_Nf = torch.tensor(Xf, dtype=torch.float32, device=device)
+        self.x_train_Nu = torch.tensor(Xb, dtype=torch.float64, device=device)
+        self.u_train_Nu = torch.tensor(Ub, dtype=torch.float64, device=device)
+        self.x_train_Nf = torch.tensor(Xf, dtype=torch.float64, device=device)
 
         # Initialize optimizer
         self.optimizer = Optimizer(
@@ -163,7 +163,6 @@ class PINN(nn.Module):
             X_train_Nu (torch.Tensor): Boundary points
             U_train_Nu (torch.Tensor): Boundary values
             X_train_Nf (torch.Tensor): Collocation points
-            p (float): p-value for the p-Laplacian
 
         Returns:
             dict: Dictionary containing individual loss components
