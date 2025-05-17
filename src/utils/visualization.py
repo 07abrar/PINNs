@@ -5,7 +5,7 @@ class TrainingDataVisualizer:
     Class to visualize the point distribution of boundary and collocation points.
     """
     @staticmethod
-    def visualize_training_data(X_train_Nu, X_train_Nf, save_path=None):
+    def training_data_plot(X_train_Nu, X_train_Nf, save_path=None):
         """
         Visualize the boundary and collocation points.
 
