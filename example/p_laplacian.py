@@ -1,10 +1,16 @@
-import sys, time
-sys.path.insert(0, "..")
+import os
+import sys
+import time
+from datetime import datetime
 
+import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.autograd as autograd
-import matplotlib.pyplot as plt
-import numpy as np
+
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+)
 from src.pinns import PINN
 from src.utils.visualization import TrainingDataVisualizer as TDV
 
@@ -75,9 +81,11 @@ model = PINN(
     hidden_dim=50,
     output_dim=1,
     num_hidden_layers=4,
+    device=device,
     Nd=50, # number of boundary points
     Nc=1000, # number of collocation points
-    device=device
+    optimizer_type = "adam",
+    lr = 1e-4,
 )
 model.double()  # convert model to double precision
 model.to(device)
@@ -116,3 +124,87 @@ while loss_values2 > 1e-4:
 
 elapsed = time.time() - start_time
 print('Training time: %.2f' % (elapsed))
+
+# Define a grid over input domain
+n = 100  # grid resolution
+x = np.linspace(-1, 1, n)
+y = np.linspace(-1, 1, n)
+X, Y = np.meshgrid(x, y)
+XY = np.stack([X.ravel(), Y.ravel()], axis=1)
+XY_tensor = torch.tensor(XY, dtype=torch.double).to(device)
+
+# Predict using the trained model
+with torch.no_grad():
+    u_pred = model.model.forward(XY_tensor).cpu().numpy().reshape(n, n)
+
+# Compute the real solution
+p = 2.0  # Make sure this matches your PDE
+N = 2
+C = (p - 1) / p * N ** (1 / (1 - p))
+u_real = np.zeros_like(X)
+u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
+
+# Mask for circular domain
+def circular_mask(x, y):
+    return x ** 2 + y ** 2 <= 1 ** 2  # Points inside a circle of radius 1
+
+mask = circular_mask(X, Y)
+
+# Masked arrays for plotting
+u_pred_masked = np.ma.array(u_pred, mask=~mask)
+u_real_masked = np.ma.array(u_real, mask=~mask)
+error_masked = np.ma.array(np.abs(u_pred - u_real), mask=~mask)
+
+# Specify the directory to save the model and graph
+current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
+os.makedirs(save_dir, exist_ok=True)
+
+# Save the model
+optimizer_type = getattr(model.optimizer, "optimizer_type", "adam")
+save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
+torch.save(model.state_dict(), save_model_path)
+print(f"Model saved to {save_model_path}")
+
+# Save the loss function graph
+plt.figure(figsize=(8, 5))
+plt.title("Loss function")
+plt.semilogy(loss_values, label="Training Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
+plt.savefig(save_loss_graph, bbox_inches="tight", dpi=150)
+print(f"Loss function graph saved to {save_model_path}")
+
+# Save the predictions and real solution
+plt.figure(figsize=(16, 4))
+
+# Plot Model Prediction
+plt.subplot(1, 3, 1)
+contour1 = plt.contourf(X, Y, u_pred_masked, levels=50, cmap='hsv')
+plt.colorbar(contour1, label='u_pred')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Model Prediction')
+
+# Plot Real Solution
+plt.subplot(1, 3, 2)
+contour2 = plt.contourf(X, Y, u_real_masked, levels=50, cmap='hsv')
+plt.colorbar(contour2, label='u_real')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Real Solution')
+
+# Plot Absolute Error
+plt.subplot(1, 3, 3)
+contour3 = plt.contourf(X, Y, error_masked, levels=50, cmap='inferno')
+plt.colorbar(contour3, label='|u_pred - u_real|')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Absolute Error')
+
+save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
+plt.tight_layout()
+plt.savefig(save_predictions_path, bbox_inches="tight", dpi=450)
