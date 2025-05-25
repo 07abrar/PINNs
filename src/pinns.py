@@ -99,7 +99,7 @@ class PINN(nn.Module):
             loss (torch.Tensor): training loss tensor
             test_loss (torch.Tensor): boundary loss tensor
         """
-        super().train(mode=True)  # Set to training mode
+        self.train()
         self.zero_grad()
         loss = self.compute_loss(
             self.x_train_Nu,
@@ -109,7 +109,7 @@ class PINN(nn.Module):
         )
         self.loss_backward(loss)
         self.step()
-        super().eval()  # Set to evaluation mode
+        self.eval()
         return loss
 
     def train(self, mode: bool = True):
