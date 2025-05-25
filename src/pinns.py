@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import time
+from typing import List, Tuple, Optional
 
 from src import NeuralNet, Losses, TrainingDataGenerator, Optimizer
 
@@ -97,7 +99,7 @@ class PINN(nn.Module):
             loss (torch.Tensor): training loss tensor
             test_loss (torch.Tensor): boundary loss tensor
         """
-        self.train()
+        super().train(mode=True)  # Set to training mode
         self.zero_grad()
         loss = self.compute_loss(
             self.x_train_Nu,
@@ -107,11 +109,44 @@ class PINN(nn.Module):
         )
         self.loss_backward(loss)
         self.step()
-        self.eval()
+        super().eval()  # Set to evaluation mode
         return loss
 
     def train(self, mode: bool = True):
         return super().train(mode)
+
+    def execute_training_loop(self, loss_threshold: float, **kwargs) -> Tuple[List[float], float]:
+        """
+        Executes the training loop until the loss falls below loss_threshold.
+        """
+        self.train(mode=True)  # Set the model to training mode
+
+        epochs = 0
+        loss_values1 = 1.0
+        loss_values2 = 1.0  # Ensure loop starts
+        recorded_loss_values = []
+        start_time = time.time()
+
+        while loss_values2 > loss_threshold:
+            current_loss = self(**kwargs)  # Calls PINN.__call__
+            recorded_loss_values.append(current_loss.item())
+
+            if epochs == 0:
+                loss_values1 = 1.0
+                loss_values2 = recorded_loss_values[0]
+                print("Training Loss ----- Test Loss") # "Test Loss" here is overall current step loss
+            else:
+                loss_values1 = recorded_loss_values[epochs-1]
+                loss_values2 = recorded_loss_values[epochs]
+
+            if epochs % 100 == 0:
+                print(f"{epochs} - {current_loss}")
+
+            epochs += 1
+
+        elapsed = time.time() - start_time
+        print(f"Training time: {elapsed:.2f} s")
+        return recorded_loss_values, elapsed
 
     def zero_grad(self):
         """Clear gradients via the wrapped optimizer."""
