@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 from datetime import datetime
 
 import numpy as np
@@ -98,32 +97,8 @@ x_train_Nf = model.x_train_Nf
 
 TDV.training_data_plot(x_train_Nu, x_train_Nf)
 
-epochs = 0
-loss_values1 = 1
-loss_values2 = 1
-error = 1
-loss_values = []
-
-start_time = time.time()
-while loss_values2 > 1e-4:
-    loss = model(bc_weight=10)
-    loss_values.append(loss.item())
-
-    if epochs == 0:
-        print("Training Loss ----- Test Loss")
-        loss_values1 = 1
-        loss_values2 = loss_values[0]
-    else:
-        loss_values1 = loss_values[epochs-1]
-        loss_values2 = loss_values[epochs]
-    error = ((loss_values2 - loss_values1)**2)
-    if epochs % 100 == 0:
-        print(epochs,'-',loss)
-
-    epochs += 1
-
-elapsed = time.time() - start_time
-print('Training time: %.2f' % (elapsed))
+loss_values, elapsed_time = model.execute_training_loop(loss_threshold=1e-4, bc_weight=10)
+print('Training time: %.2f s' % (elapsed_time))
 
 # Define a grid over input domain
 n = 100  # grid resolution
