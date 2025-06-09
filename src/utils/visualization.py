@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 
+
 class TrainingDataVisualizer:
     """
     Class to visualize the point distribution of boundary and collocation points.

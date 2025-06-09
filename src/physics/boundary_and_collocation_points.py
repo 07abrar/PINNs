@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.stats import qmc
 
+
 class BoundaryPoints:
     """
     Class to generate boundary points for PINNs.
@@ -8,7 +9,8 @@ class BoundaryPoints:
     Attributes:
         Nd (int): Number of boundary points.
     """
-    def __init__(self, Nd:int=50):
+
+    def __init__(self, Nd: int = 50):
         """
         Initialize the class with the number of boundary points.
 
@@ -44,6 +46,7 @@ class CollocationPoints:
     Attributes:
         Nc (int): Number of collocation points.
     """
+
     def __init__(self, Nc=1000):
         """
         Initialize the class with the number of collocation points.
@@ -74,6 +77,7 @@ class TrainingDataGenerator:
     """
     Class to combine boundary and collocation points for training data.
     """
+
     def __init__(self, Nd=50, Nc=1000):
         """
         Initialize the class with the number of boundary and collocation points.

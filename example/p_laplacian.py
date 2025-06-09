@@ -4,14 +4,16 @@ from datetime import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
+
 import torch
 import torch.autograd as autograd
+
+from src.pinns import PINN
+from src.utils.visualization import TrainingDataVisualizer as TDV
 
 sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 )
-from src.pinns import PINN
-from src.utils.visualization import TrainingDataVisualizer as TDV
 
 # reproducibility
 torch.manual_seed(31)
@@ -20,7 +22,9 @@ torch.manual_seed(31)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Example 1: 2D p-poisson equation
-def pde_residual(coords, u_pred):
+
+
+def pde_residual(coords, u_pred_pde):
     """
     Compute the residual of the 2D p-Laplacian Poisson equation
 
@@ -28,17 +32,17 @@ def pde_residual(coords, u_pred):
 
     Args:
         coords (torch.Tensor): shape (N,2) input points (x,y), requires_grad=True
-        u_pred (torch.Tensor): shape (N,1) model's predicted u at coords
+        u_pred_pde (torch.Tensor): shape (N,1) model's predicted u at coords
 
     Returns:
         torch.Tensor: PDE residual r(x,y) = −∇·( |∇u|^(p-2) ∇u ) - 1
     """
-    p = 2.0  # p-Laplacian exponent
+    p_exp = 2.0  # p-Laplacian exponent
     # 1) Compute gradient ∇u = (∂u/∂x, ∂u/∂y)
     u_grad = autograd.grad(
-        outputs=u_pred,
+        outputs=u_pred_pde,
         inputs=coords,
-        grad_outputs=torch.ones_like(u_pred).to(device),
+        grad_outputs=torch.ones_like(u_pred_pde).to(device),
         retain_graph=True,
         create_graph=True
     )[0]
@@ -46,7 +50,7 @@ def pde_residual(coords, u_pred):
     u_grad_y = u_grad[:, 1]
 
     # 2) Compute |∇u|^(p−2)
-    grad_norm_power = (u_grad_x**2 + u_grad_y**2)**((p - 2) / 2)
+    grad_norm_power = (u_grad_x**2 + u_grad_y**2)**((p_exp - 2) / 2)
 
     # 3) Form flux q = |∇u|^(p−2) ∇u
     flux_x = grad_norm_power * u_grad_x
@@ -73,6 +77,7 @@ def pde_residual(coords, u_pred):
     # 5) PDE residual: −∇·( |∇u|^(p−2) ∇u ) − 1
     return -p_laplacian - 1
 
+
 # 2) instantiate PINN
 model = PINN(
     pde_residual=pde_residual,
@@ -81,10 +86,10 @@ model = PINN(
     output_dim=1,
     num_hidden_layers=4,
     device=device,
-    Nd=50, # number of boundary points
-    Nc=1000, # number of collocation points
-    optimizer_type = "adam",
-    lr = 1e-4,
+    Nd=50,  # number of boundary points
+    Nc=1000,  # number of collocation points
+    optimizer_type="adam",
+    lr=1e-4,
 )
 model.double()  # convert model to double precision
 model.to(device)
@@ -95,9 +100,11 @@ x_train_Nu = model.x_train_Nu
 u_train_Nu = model.u_train_Nu
 x_train_Nf = model.x_train_Nf
 
+# visualize the distribution of training data
 TDV.training_data_plot(x_train_Nu, x_train_Nf)
 
-loss_values, elapsed_time = model.execute_training_loop(loss_threshold=1e-4, bc_weight=10)
+loss_values, elapsed_time = model.execute_training_loop(
+    loss_threshold=1e-4, bc_weight=10)
 print('Training time: %.2f s' % (elapsed_time))
 
 # Define a grid over input domain
@@ -120,8 +127,11 @@ u_real = np.zeros_like(X)
 u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
 
 # Mask for circular domain
+
+
 def circular_mask(x, y):
     return x ** 2 + y ** 2 <= 1 ** 2  # Points inside a circle of radius 1
+
 
 mask = circular_mask(X, Y)
 

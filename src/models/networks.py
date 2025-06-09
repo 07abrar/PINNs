@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class NeuralNet(nn.Module):
     """
     A fully connected neural network for PINNs.
@@ -12,6 +13,7 @@ class NeuralNet(nn.Module):
     num_hidden_layers: Number of hidden layers in the network.
     activation: Activation function to use (default is tanh).
     """
+
     def __init__(
         self,
         input_dim: int,
@@ -23,7 +25,8 @@ class NeuralNet(nn.Module):
         super(NeuralNet, self).__init__()
         self.input_layer = nn.Linear(input_dim, hidden_dim)
         self.hidden_layers = nn.ModuleList(
-            [nn.Linear(hidden_dim, hidden_dim) for _ in range(num_hidden_layers)]
+            [nn.Linear(hidden_dim, hidden_dim)
+             for _ in range(num_hidden_layers)]
         )
         self.output_layer = nn.Linear(hidden_dim, output_dim)
 
@@ -42,9 +45,11 @@ class NeuralNet(nn.Module):
         """
         Forward pass through the network.
         """
-        x = self.activation(self.input_layer(x))  # Apply activation to the input layer
+        x = self.activation(self.input_layer(
+            x))  # Apply activation to the input layer
         for hidden_layer in self.hidden_layers:
-            x = self.activation(hidden_layer(x))  # Apply activation to each hidden layer
+            # Apply activation to each hidden layer
+            x = self.activation(hidden_layer(x))
         # No activation function is applied to the output layer
         # as it will restrict the output range
         x = self.output_layer(x)

@@ -2,15 +2,17 @@ import torch
 import torch.nn as nn
 import torch.autograd as autograd
 
+
 class Losses(nn.Module):
     """
     A class to compute loss functions for training PINNs.
     """
+
     def __init__(self,
-        pde_residual: callable,
-        model: torch.nn.Module,
-        device='cpu',
-        reduction='mean') -> None:
+                 pde_residual: callable,
+                 model: torch.nn.Module,
+                 device='cpu',
+                 reduction='mean') -> None:
         """
         Initialize the loss functions.
 
@@ -73,8 +75,9 @@ class Losses(nn.Module):
             torch.Tensor: PDE residual loss
         """
         coords = torch.tensor(x_train_Nf, dtype=torch.float64, device=device)
-        coords.requires_grad_() # Enable gradient tracking for collocation points
+        coords.requires_grad_()  # Enable gradient tracking for collocation points
         u_pred = self.model.forward(coords)
         residual_function = self.pde_residual(coords, u_pred)
-        true_solution = torch.zeros_like(u_pred, dtype=torch.float64).to(self.device)
+        true_solution = torch.zeros_like(
+            u_pred, dtype=torch.float64).to(self.device)
         return self.loss_function(residual_function, true_solution)

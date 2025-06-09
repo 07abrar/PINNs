@@ -2,10 +2,12 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR, CosineAnnealingLR
 
+
 class Optimizer:
     """
     Class for configuring and managing optimizers for training PINNs.
     """
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -68,7 +70,7 @@ class Optimizer:
                 mode='min',
                 factor=kwargs.get('factor', 0.5),
                 patience=kwargs.get('patience', 10),
-                verbose=kwargs.get('verbose', True)
+                # verbose=kwargs.get('verbose', True)
             )
         elif scheduler_type == "step":
             self.scheduler = StepLR(
@@ -117,10 +119,9 @@ class Optimizer:
 
         if isinstance(self.scheduler, ReduceLROnPlateau):
             if metric is None:
-                raise ValueError("ReduceLROnPlateau scheduler requires a metric value")
+                raise ValueError(
+                    "ReduceLROnPlateau scheduler requires a metric value")
             self.scheduler.step(metric)
-        else:
-            self.scheduler.step()
 
     def get_lr(self):
         """

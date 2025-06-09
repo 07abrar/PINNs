@@ -12,9 +12,10 @@ class PINN(nn.Module):
     This class encapsulates the neural network from NeuralNet
     and the loss functions from Losses.
     """
+
     def __init__(
         self,
-        #args for the PDE
+        # args for the PDE
         pde_residual: callable,
         # Args for the neural network
         input_dim: int,
@@ -134,7 +135,8 @@ class PINN(nn.Module):
             if epochs == 0:
                 loss_values1 = 1.0
                 loss_values2 = recorded_loss_values[0]
-                print("Training Loss ----- Test Loss") # "Test Loss" here is overall current step loss
+                # "Test Loss" here is overall current step loss
+                print("Training Loss ----- Test Loss")
             else:
                 loss_values1 = recorded_loss_values[epochs-1]
                 loss_values2 = recorded_loss_values[epochs]
@@ -202,7 +204,8 @@ class PINN(nn.Module):
         Returns:
             dict: Dictionary containing individual loss components
         """
-        boundary_loss = self.loss_calculator.boundary_loss(X_train_Nu, U_train_Nu)
+        boundary_loss = self.loss_calculator.boundary_loss(
+            X_train_Nu, U_train_Nu)
         pde_loss = self.loss_calculator.pde_loss(X_train_Nf, p)
 
         return {
