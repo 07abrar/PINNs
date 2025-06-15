@@ -111,7 +111,7 @@ x = np.linspace(-1, 1, n)
 y = np.linspace(-1, 1, n)
 X, Y = np.meshgrid(x, y)
 XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=torch.double).to(device)
+XY_tensor = torch.tensor(XY, dtype=model.dtype).to(model.device)
 
 # Predict using the trained model
 with torch.no_grad():

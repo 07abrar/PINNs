@@ -67,15 +67,16 @@ class PINN(nn.Module):
         self.loss_calculator = Losses(
             pde_residual=self.pde_residual,
             model=self.model,
+            dtype=dtype,
             device=device
         )
 
         # Initialize training data
         self.data_generator = TrainingDataGenerator(Nd=Nd, Nc=Nc)
         Xb, Ub, Xf = self.data_generator.generate_training_data()
-        self.x_train_Nu = torch.tensor(Xb, dtype=torch.float64, device=device)
-        self.u_train_Nu = torch.tensor(Ub, dtype=torch.float64, device=device)
-        self.x_train_Nf = torch.tensor(Xf, dtype=torch.float64, device=device)
+        self.x_train_Nu = torch.tensor(Xb, dtype=self.dtype, device=device)
+        self.u_train_Nu = torch.tensor(Ub, dtype=self.dtype, device=device)
+        self.x_train_Nf = torch.tensor(Xf, dtype=self.dtype, device=device)
 
         # Initialize optimizer
         self.optimizer = Optimizer(
@@ -209,7 +210,7 @@ class PINN(nn.Module):
         """
         boundary_loss = self.loss_calculator.boundary_loss(
             X_train_Nu, U_train_Nu)
-        pde_loss = self.loss_calculator.pde_loss(X_train_Nf, p)
+        pde_loss = self.loss_calculator.pde_loss(X_train_Nf)
 
         return {
             'boundary_loss': boundary_loss.item(),

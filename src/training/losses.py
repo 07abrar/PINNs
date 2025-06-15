@@ -11,6 +11,7 @@ class Losses(nn.Module):
     def __init__(self,
                  pde_residual: callable,
                  model: torch.nn.Module,
+                 dtype: torch.dtype = torch.float32,
                  device='cpu',
                  reduction='mean') -> None:
         """
@@ -26,6 +27,7 @@ class Losses(nn.Module):
         self.pde_residual = pde_residual
         self.model = model
         self.device = device
+        self.dtype = dtype
         self.loss_function = nn.MSELoss(reduction=reduction)
 
     def total_loss(self, x_train_Nu, u_train_Nu, x_train_Nf, bc_weight=10.0):
@@ -60,7 +62,7 @@ class Losses(nn.Module):
         predicted_u = self.model.forward(x_train_Nu)
         return self.loss_function(predicted_u, u_train_Nu)
 
-    def pde_loss(self, x_train_Nf, device='cpu') -> torch.Tensor:
+    def pde_loss(self, x_train_Nf) -> torch.Tensor:
         """
         Calculate the PDE residual loss.
         This function computes the PDE residual loss from self.pde_residual with
@@ -74,10 +76,10 @@ class Losses(nn.Module):
         Returns:
             torch.Tensor: PDE residual loss
         """
-        coords = torch.tensor(x_train_Nf, dtype=torch.float64, device=device)
+        coords = torch.tensor(x_train_Nf, dtype=self.dtype, device=self.device)
         coords.requires_grad_()  # Enable gradient tracking for collocation points
         u_pred = self.model.forward(coords)
         residual_function = self.pde_residual(coords, u_pred)
         true_solution = torch.zeros_like(
-            u_pred, dtype=torch.float64).to(self.device)
+            u_pred, dtype=self.dtype).to(self.device)
         return self.loss_function(residual_function, true_solution)
