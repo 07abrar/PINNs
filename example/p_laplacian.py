@@ -86,14 +86,12 @@ model = PINN(
     output_dim=1,
     num_hidden_layers=4,
     device=device,
+    # dtype=torch.double,
     Nd=50,  # number of boundary points
     Nc=1000,  # number of collocation points
     optimizer_type="adam",
     lr=1e-4,
 )
-model.double()  # convert model to double precision
-model.to(device)
-print("Using device:", next(model.parameters()).device)
 
 # grab the data generated in PINN.__init__
 x_train_Nu = model.x_train_Nu

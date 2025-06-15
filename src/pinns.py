@@ -1,7 +1,8 @@
-import torch
-import torch.nn as nn
 import time
 from typing import List, Tuple, Optional
+
+import torch
+import torch.nn as nn
 
 from src import NeuralNet, Losses, TrainingDataGenerator, Optimizer
 
@@ -24,6 +25,7 @@ class PINN(nn.Module):
         num_hidden_layers: int,
         activation: str = "tanh",
         device: str = "cpu",
+        dtype: torch.dtype = torch.float32,
         # Args for training data distribution
         Nd: int = 50,
         Nc: int = 1000,
@@ -54,11 +56,12 @@ class PINN(nn.Module):
         super(PINN, self).__init__()
         self.pde_residual = pde_residual
         self.device = device
+        self.dtype = dtype
 
         # Initialize the neural network
         self.model = NeuralNet(
             input_dim, hidden_dim, output_dim, num_hidden_layers, activation
-        ).to(device)
+        ).to(device=device, dtype=dtype)
 
         # Initialize the loss calculator
         self.loss_calculator = Losses(
