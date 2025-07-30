@@ -21,6 +21,9 @@ torch.manual_seed(31)
 # device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Get maximum available threads
+max_threads = os.cpu_count()
+
 # Example 1: 2D p-poisson equation
 
 
@@ -91,6 +94,7 @@ model = PINN(
     Nc=1000,  # number of collocation points
     optimizer_type="adam",
     lr=1e-4,
+    num_threads=max_threads,  # Use n CPU threads for faster training
 )
 
 # grab the data generated in PINN.__init__

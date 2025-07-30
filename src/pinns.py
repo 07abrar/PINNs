@@ -34,6 +34,8 @@ class PINN(nn.Module):
         lr: float = 1e-3,
         weight_decay: float = 1e-6,
         scheduler_type: str = None,
+        # Args for CPU threading
+        num_threads: Optional[int] = None,
         **opt_kwargs
     ) -> None:
         """
@@ -52,11 +54,23 @@ class PINN(nn.Module):
             lr (float): Learning rate for the optimizer
             weight_decay (float): Weight decay for regularization
             scheduler_type (str, optional): Type of learning rate scheduler
+            num_threads (int, optional): Number of CPU threads for PyTorch operations. 
+                                       If None, uses PyTorch default (single core processing).
+                                       Set to number of CPU cores for maximum performance.
         """
         super(PINN, self).__init__()
         self.pde_residual = pde_residual
         self.device = device
         self.dtype = dtype
+
+        # Set number of threads for CPU operations
+        if num_threads is not None:
+            torch.set_num_threads(num_threads)
+            print(f"PyTorch CPU threads set to: {num_threads}")
+        else:
+            # Set to single thread for default behavior
+            torch.set_num_threads(1)
+            print("Using default single-threaded CPU processing (1 thread)")
 
         # Initialize the neural network
         self.model = NeuralNet(
