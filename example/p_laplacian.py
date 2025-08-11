@@ -3,7 +3,6 @@ import sys
 from datetime import datetime
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
 import torch.autograd as autograd
@@ -38,7 +37,7 @@ def pde_residual(coords, u_pred_pde):
         u_pred_pde (torch.Tensor): shape (N,1) model's predicted u at coords
 
     Returns:
-        torch.Tensor: PDE residual r(x,y) = −∇·( |∇u|^(p-2) ∇u ) - 1
+        torch.Tensor: PDE residual r(x,y) = −∇·( |∇u|^(p−2) ∇u ) - 1
     """
     p_exp = 2.0  # p-Laplacian exponent
     # 1) Compute gradient ∇u = (∂u/∂x, ∂u/∂y)
@@ -137,12 +136,7 @@ def circular_mask(x, y):
 
 mask = circular_mask(X, Y)
 
-# Masked arrays for plotting
-u_pred_masked = np.ma.array(u_pred, mask=~mask)
-u_real_masked = np.ma.array(u_real, mask=~mask)
-error_masked = np.ma.array(np.abs(u_pred - u_real), mask=~mask)
-
-# Specify the directory to save the model and graph
+# Use visualization helpers for plotting and saving
 current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
@@ -154,44 +148,24 @@ save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
 torch.save(model.state_dict(), save_model_path)
 print(f"Model saved to {save_model_path}")
 
-# Save the loss function graph
-plt.figure(figsize=(8, 5))
-plt.title("Loss function")
-plt.semilogy(loss_values, label="Training Loss")
-plt.xlabel("Epoch")
-plt.ylabel("Loss")
-plt.legend()
+# Loss curve
 save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
-plt.savefig(save_loss_graph, bbox_inches="tight", dpi=150)
-print(f"Loss function graph saved to {save_model_path}")
+TDV.loss_curve(loss_values, save_path=save_loss_graph,
+               title="Loss function", show=False, dpi=150)
 
-# Save the predictions and real solution
-plt.figure(figsize=(16, 4))
-
-# Plot Model Prediction
-plt.subplot(1, 3, 1)
-contour1 = plt.contourf(X, Y, u_pred_masked, levels=50, cmap='hsv')
-plt.colorbar(contour1, label='u_pred')
-plt.xlabel('x')
-plt.ylabel('y')
-plt.title('Model Prediction')
-
-# Plot Real Solution
-plt.subplot(1, 3, 2)
-contour2 = plt.contourf(X, Y, u_real_masked, levels=50, cmap='hsv')
-plt.colorbar(contour2, label='u_real')
-plt.xlabel('x')
-plt.ylabel('y')
-plt.title('Real Solution')
-
-# Plot Absolute Error
-plt.subplot(1, 3, 3)
-contour3 = plt.contourf(X, Y, error_masked, levels=50, cmap='inferno')
-plt.colorbar(contour3, label='|u_pred - u_real|')
-plt.xlabel('x')
-plt.ylabel('y')
-plt.title('Absolute Error')
-
+# Predictions and error figure
 save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
-plt.tight_layout()
-plt.savefig(save_predictions_path, bbox_inches="tight", dpi=450)
+TDV.prediction_and_error(
+    X=X,
+    Y=Y,
+    u_pred=u_pred,
+    u_real=u_real,
+    mask=mask,
+    save_path=save_predictions_path,
+    cmap_pred='hsv',
+    cmap_real='hsv',
+    cmap_err='inferno',
+    levels=50,
+    dpi=450,
+    show=False,
+)
