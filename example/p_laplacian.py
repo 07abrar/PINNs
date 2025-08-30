@@ -1,32 +1,12 @@
-import os
-import sys
 from datetime import datetime
-
+import os
 import numpy as np
-
+import src as pinns
 import torch
-import torch.autograd as autograd
-
-from src.pinns import PINN
-from src.utils.visualization import TrainingDataVisualizer as TDV
-
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-)
-
-# reproducibility
-torch.manual_seed(31)
-
-# device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Get maximum available threads
-max_threads = os.cpu_count()
-
-# Example 1: 2D p-poisson equation
+from torch import autograd
 
 
-def pde_residual(coords, u_pred_pde):
+def my_pde_residual(coords, u_pred):
     """
     Compute the residual of the 2D p-Laplacian Poisson equation
 
@@ -34,17 +14,18 @@ def pde_residual(coords, u_pred_pde):
 
     Args:
         coords (torch.Tensor): shape (N,2) input points (x,y), requires_grad=True
-        u_pred_pde (torch.Tensor): shape (N,1) model's predicted u at coords
+        u_pred (torch.Tensor): shape (N,1) model's predicted u at coords
 
     Returns:
-        torch.Tensor: PDE residual r(x,y) = −∇·( |∇u|^(p−2) ∇u ) - 1
+        torch.Tensor: PDE residual r(x,y) = −∇·( |∇u|^(p-2) ∇u ) - 1
     """
-    p_exp = 2.0  # p-Laplacian exponent
+    device = coords.device
+    p = 2.0  # p-Laplacian exponent
     # 1) Compute gradient ∇u = (∂u/∂x, ∂u/∂y)
     u_grad = autograd.grad(
-        outputs=u_pred_pde,
+        outputs=u_pred,
         inputs=coords,
-        grad_outputs=torch.ones_like(u_pred_pde).to(device),
+        grad_outputs=torch.ones_like(u_pred).to(device),
         retain_graph=True,
         create_graph=True
     )[0]
@@ -52,7 +33,7 @@ def pde_residual(coords, u_pred_pde):
     u_grad_y = u_grad[:, 1]
 
     # 2) Compute |∇u|^(p−2)
-    grad_norm_power = (u_grad_x**2 + u_grad_y**2)**((p_exp - 2) / 2)
+    grad_norm_power = (u_grad_x**2 + u_grad_y**2)**((p - 2) / 2)
 
     # 3) Form flux q = |∇u|^(p−2) ∇u
     flux_x = grad_norm_power * u_grad_x
@@ -80,33 +61,47 @@ def pde_residual(coords, u_pred_pde):
     return -p_laplacian - 1
 
 
-# 2) instantiate PINN
-model = PINN(
-    pde_residual=pde_residual,
-    input_dim=2,
-    hidden_dim=50,
-    output_dim=1,
-    num_hidden_layers=4,
-    device=device,
-    # dtype=torch.double,
-    Nd=50,  # number of boundary points
-    Nc=1000,  # number of collocation points
-    optimizer_type="adam",
-    lr=1e-4,
-    num_threads=max_threads,  # Use n CPU threads for faster training
+# 1. Define domain
+domain = pinns.CircularDomain(
+    center=(0, 0),
+    radius=1,
+    training_data={
+        "boundary": 100,
+        "collocation": 1000
+    }
+)
+# or
+# domain = pinns.PolygonDomain(vertices=[(0, 0), (1, 1), (1, 0), (0, 0)])
+pinns.TrainingDataVisualizer.training_data_plot(
+    domain.boundary_points, domain.collocation_points
 )
 
-# grab the data generated in PINN.__init__
-x_train_Nu = model.x_train_Nu
-u_train_Nu = model.u_train_Nu
-x_train_Nf = model.x_train_Nf
 
-# visualize the distribution of training data
-TDV.training_data_plot(x_train_Nu, x_train_Nf)
+# 2. Define problem
+problem = pinns.PDEProblem(
+    residual_fn=my_pde_residual,
+    boundary_conditions={"dirichlet": 0.0}
+)
 
-loss_values, elapsed_time = model.execute_training_loop(
-    loss_threshold=1e-4, bc_weight=10)
-print('Training time: %.2f s' % (elapsed_time))
+# 3. Create PINN (network + loss only)
+pinn = pinns.PINN(
+    problem=problem,
+    input_dim=2, hidden_dim=50, output_dim=1,
+    num_hidden_layers=4, activation="tanh"
+)
+
+# 4. Create trainer with strategy
+trainer = pinns.Trainer(
+    pinn=pinn,
+    domain=domain,
+    optimizer_config={"type": "adam", "lr": 1e-2},
+    strategy="standard"  # or pinns.AdaptiveSamplingStrategy()
+)
+
+# 5. Train
+results = trainer.train(epochs=1000, loss_threshold=1e-4)
+
+# 6. Fix later
 
 # Define a grid over input domain
 n = 100  # grid resolution
@@ -114,11 +109,11 @@ x = np.linspace(-1, 1, n)
 y = np.linspace(-1, 1, n)
 X, Y = np.meshgrid(x, y)
 XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=model.dtype).to(model.device)
+XY_tensor = torch.tensor(XY, dtype=pinn.dtype).to(pinn.device)
 
 # Predict using the trained model
 with torch.no_grad():
-    u_pred = model.model.forward(XY_tensor).cpu().numpy().reshape(n, n)
+    u_pred = pinn.network.forward(XY_tensor).cpu().numpy().reshape(n, n)
 
 # Compute the real solution
 p = 2.0  # Make sure this matches your PDE
@@ -127,14 +122,7 @@ C = (p - 1) / p * N ** (1 / (1 - p))
 u_real = np.zeros_like(X)
 u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
 
-# Mask for circular domain
-
-
-def circular_mask(x, y):
-    return x ** 2 + y ** 2 <= 1 ** 2  # Points inside a circle of radius 1
-
-
-mask = circular_mask(X, Y)
+circular_mask = domain.create_visualization_mask(X, Y)
 
 # Use visualization helpers for plotting and saving
 current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -143,24 +131,25 @@ save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
 os.makedirs(save_dir, exist_ok=True)
 
 # Save the model
-optimizer_type = getattr(model.optimizer, "optimizer_type", "adam")
+# optimizer_type = getattr(trainer.optimizer, "adam")
+optimizer_type = "adam"
 save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
-torch.save(model.state_dict(), save_model_path)
+torch.save(pinn.state_dict(), save_model_path)
 print(f"Model saved to {save_model_path}")
 
 # Loss curve
 save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
-TDV.loss_curve(loss_values, save_path=save_loss_graph,
-               title="Loss function", show=False, dpi=150)
+pinns.TrainingDataVisualizer.loss_curve(results["loss_history"], save_path=save_loss_graph,
+                                        title="Loss function", show=False, dpi=150)
 
 # Predictions and error figure
 save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
-TDV.prediction_and_error(
+pinns.TrainingDataVisualizer.prediction_and_error(
     X=X,
     Y=Y,
     u_pred=u_pred,
     u_real=u_real,
-    mask=mask,
+    mask=circular_mask,
     save_path=save_predictions_path,
     cmap_pred='hsv',
     cmap_real='hsv',
