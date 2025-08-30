@@ -1,6 +1,7 @@
-import numpy as np
 from abc import ABC, abstractmethod
-from typing import Tuple, List
+from typing import List, Tuple
+
+import numpy as np
 import shapely.geometry as sg
 from scipy.stats import qmc
 
@@ -12,18 +13,15 @@ class Domain(ABC):
     @abstractmethod
     def boundary_points(self) -> np.ndarray:
         """Get points on the domain boundary"""
-        pass
 
     @property
     @abstractmethod
     def collocation_points(self) -> np.ndarray:
         """Get points inside the domain"""
-        pass
 
     @abstractmethod
-    def create_visualization_mask(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
         """Create mask for visualization (True = inside domain)"""
-        pass
 
 
 class CircularDomain(Domain):
@@ -33,15 +31,14 @@ class CircularDomain(Domain):
         self,
         center: Tuple[float, float] = (0, 0),
         radius: float = 1.0,
-        training_data: dict = {
-            "boundary": 100,
-            "collocation": 1000
-        }
+        training_data: dict = None,
     ):
+        if training_data is None:
+            training_data = {"boundary": 100, "collocation": 1000}
+        self.training_data = training_data
         self.center = center
         self.radius = radius
         self._geometry = sg.Point(self.center).buffer(self.radius)
-        self.training_data = training_data
 
     @property
     def boundary_points(self) -> np.ndarray:
@@ -73,28 +70,23 @@ class CircularDomain(Domain):
 
         return points
 
-    def create_visualization_mask(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
         """Create a mask for points inside the circle"""
-        dx = X - self.center[0]
-        dy = Y - self.center[1]
+        dx = x_grid - self.center[0]
+        dy = y_grid - self.center[1]
         return (dx**2 + dy**2) <= self.radius**2
 
 
 class PolygonDomain(Domain):
     """Polygon domain using Shapely for geometry operations"""
 
-    def __init__(
-        self,
-        vertices: List[Tuple[float, float]],
-        training_data: dict = {
-            "boundary": 100,
-            "collocation": 1000
-        }
-    ):
+    def __init__(self, vertices: List[Tuple[float, float]], training_data: dict = None):
         """
         Initialize polygon from vertices
         vertices: [(x1,y1), (x2,y2), ..., (xn,yn)]
         """
+        if training_data is None:
+            training_data = {"boundary": 100, "collocation": 1000}
         if len(vertices) < 3:
             raise ValueError("Polygon requires at least 3 vertices")
 
@@ -118,8 +110,7 @@ class PolygonDomain(Domain):
         boundary = self._geometry.exterior
         boundary_coords = np.array(boundary.coords[:-1])
         if len(boundary_coords) >= n_points:
-            indices = np.linspace(
-                0, len(boundary_coords)-1, n_points, dtype=int)
+            indices = np.linspace(0, len(boundary_coords) - 1, n_points, dtype=int)
             return boundary_coords[indices]
 
         # Calculate edge lengths for proportional distribution
@@ -133,8 +124,10 @@ class PolygonDomain(Domain):
         points = []
         for i, n in enumerate(points_per_edge):
             t = np.linspace(0, 1, n, endpoint=False)
-            start, end = boundary_coords[i], boundary_coords[(
-                i + 1) % len(boundary_coords)]
+            start, end = (
+                boundary_coords[i],
+                boundary_coords[(i + 1) % len(boundary_coords)],
+            )
             points.append(start + t[:, np.newaxis] * (end - start))
         return np.vstack(points)[:n_points]
 
@@ -151,9 +144,7 @@ class PolygonDomain(Domain):
         while len(points) < n_points and attempts < max_attempts:
             # Generate random points in bounding box
             candidates = np.random.uniform(
-                low=[minx, miny],
-                high=[maxx, maxy],
-                size=(n_points - len(points), 2)
+                low=[minx, miny], high=[maxx, maxy], size=(n_points - len(points), 2)
             )
 
             # Check which points are inside polygon
@@ -167,14 +158,15 @@ class PolygonDomain(Domain):
 
         if len(points) < n_points:
             print(
-                f"Warning: Only generated {len(points)} interior points out of {n_points} requested")
+                f"Warning: Only generated {len(points)} interior points out of {n_points} requested"
+            )
 
         return np.array(points)
 
-    def create_visualization_mask(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
         """Create a mask for points inside the polygon"""
-        mask = np.zeros_like(X, dtype=bool)
-        flat_points = np.column_stack((X.ravel(), Y.ravel()))
+        mask = np.zeros_like(x_grid, dtype=bool)
+        flat_points = np.column_stack((x_grid.ravel(), y_grid.ravel()))
 
         # Check each point
         for i, point in enumerate(flat_points):
@@ -190,11 +182,10 @@ class RectangularDomain(Domain):
         self,
         x_range: Tuple[float, float],
         y_range: Tuple[float, float],
-        training_data: dict = {
-            "boundary": 100,
-            "collocation": 1000
-        }
+        training_data: dict = None,
     ):
+        if training_data is None:
+            training_data = {"boundary": 100, "collocation": 1000}
         self.x_range = x_range
         self.y_range = y_range
 
@@ -203,7 +194,7 @@ class RectangularDomain(Domain):
             (x_range[0], y_range[0]),  # bottom-left
             (x_range[1], y_range[0]),  # bottom-right
             (x_range[1], y_range[1]),  # top-right
-            (x_range[0], y_range[1])   # top-left
+            (x_range[0], y_range[1]),  # top-left
         ]
         self._geometry = sg.Polygon(vertices)
         self.training_data = training_data
@@ -219,29 +210,47 @@ class RectangularDomain(Domain):
         points = []
 
         # Bottom edge
-        x = np.linspace(self.x_range[0], self.x_range[1],
-                        points_per_edge + (1 if remainder > 0 else 0))
+        x = np.linspace(
+            self.x_range[0],
+            self.x_range[1],
+            points_per_edge + (1 if remainder > 0 else 0),
+        )
         y = np.full_like(x, self.y_range[0])
         points.extend(zip(x, y))
         remainder -= 1
 
         # Right edge
-        y = np.linspace(self.y_range[0], self.y_range[1], points_per_edge +
-                        (1 if remainder > 0 else 0))[1:]  # Skip corner
+        y = np.linspace(
+            self.y_range[0],
+            self.y_range[1],
+            points_per_edge + (1 if remainder > 0 else 0),
+        )[
+            1:
+        ]  # Skip corner
         x = np.full_like(y, self.x_range[1])
         points.extend(zip(x, y))
         remainder -= 1
 
         # Top edge
-        x = np.linspace(self.x_range[1], self.x_range[0], points_per_edge +
-                        (1 if remainder > 0 else 0))[1:]  # Skip corner
+        x = np.linspace(
+            self.x_range[1],
+            self.x_range[0],
+            points_per_edge + (1 if remainder > 0 else 0),
+        )[
+            1:
+        ]  # Skip corner
         y = np.full_like(x, self.y_range[1])
         points.extend(zip(x, y))
         remainder -= 1
 
         # Left edge
-        y = np.linspace(self.y_range[1], self.y_range[0], points_per_edge +
-                        (1 if remainder > 0 else 0))[1:-1]  # Skip corners
+        y = np.linspace(
+            self.y_range[1],
+            self.y_range[0],
+            points_per_edge + (1 if remainder > 0 else 0),
+        )[
+            1:-1
+        ]  # Skip corners
         x = np.full_like(y, self.x_range[0])
         points.extend(zip(x, y))
 
@@ -256,14 +265,20 @@ class RectangularDomain(Domain):
 
         # Scale to rectangle bounds
         points = np.zeros((n_points, 2))
-        points[:, 0] = self.x_range[0] + samples[:, 0] * \
-            (self.x_range[1] - self.x_range[0])
-        points[:, 1] = self.y_range[0] + samples[:, 1] * \
-            (self.y_range[1] - self.y_range[0])
+        points[:, 0] = self.x_range[0] + samples[:, 0] * (
+            self.x_range[1] - self.x_range[0]
+        )
+        points[:, 1] = self.y_range[0] + samples[:, 1] * (
+            self.y_range[1] - self.y_range[0]
+        )
 
         return points
 
-    def create_visualization_mask(self, X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
         """Create rectangular mask for plotting"""
-        return ((X >= self.x_range[0]) & (X <= self.x_range[1]) &
-                (Y >= self.y_range[0]) & (Y <= self.y_range[1]))
+        return (
+            (x_grid >= self.x_range[0])
+            & (x_grid <= self.x_range[1])
+            & (y_grid >= self.y_range[0])
+            & (y_grid <= self.y_range[1])
+        )
