@@ -40,8 +40,9 @@ def training_data_plot(
     x = np.linspace(x_min, x_max, 100)
     y = np.linspace(y_min, y_max, 100)
     x_grid, y_grid = np.meshgrid(x, y)
+    mask_values = mask(x_grid, y_grid)
 
-    plt.contour(x_grid, y_grid, mask, levels=[0.5], colors="green", linewidths=2)
+    plt.contour(x_grid, y_grid, mask_values, levels=[0.5], colors="green", linewidths=2)
     plt.axis("equal")
     plt.legend()
     plt.xlabel("x")
