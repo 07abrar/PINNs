@@ -1,9 +1,11 @@
 from datetime import datetime
 import os
+
 import numpy as np
-import src as pinns
 import torch
 from torch import autograd
+
+import src as pinns
 
 
 def my_pde_residual(coords, u_pred):
@@ -27,13 +29,13 @@ def my_pde_residual(coords, u_pred):
         inputs=coords,
         grad_outputs=torch.ones_like(u_pred).to(device),
         retain_graph=True,
-        create_graph=True
+        create_graph=True,
     )[0]
     u_grad_x = u_grad[:, 0]
     u_grad_y = u_grad[:, 1]
 
     # 2) Compute |∇u|^(p−2)
-    grad_norm_power = (u_grad_x**2 + u_grad_y**2)**((p - 2) / 2)
+    grad_norm_power = (u_grad_x**2 + u_grad_y**2) ** ((p - 2) / 2)
 
     # 3) Form flux q = |∇u|^(p−2) ∇u
     flux_x = grad_norm_power * u_grad_x
@@ -45,14 +47,14 @@ def my_pde_residual(coords, u_pred):
         inputs=coords,
         grad_outputs=torch.ones_like(flux_x).to(device),
         retain_graph=True,
-        create_graph=True
+        create_graph=True,
     )[0][:, 0]
     div_q_y = autograd.grad(
         outputs=flux_y,
         inputs=coords,
         grad_outputs=torch.ones_like(flux_y).to(device),
         retain_graph=True,
-        create_graph=True
+        create_graph=True,
     )[0][:, 1]
 
     p_laplacian = div_q_x + div_q_y
@@ -65,37 +67,35 @@ def my_pde_residual(coords, u_pred):
 domain = pinns.CircularDomain(
     center=(0, 0),
     radius=1,
-    training_data={
-        "boundary": 100,
-        "collocation": 1000
-    }
+    training_data={"boundary": 100, "collocation": 1000},
 )
 # or
-# domain = pinns.PolygonDomain(vertices=[(0, 0), (1, 1), (1, 0), (0, 0)])
-pinns.TrainingDataVisualizer.training_data_plot(
-    domain.boundary_points, domain.collocation_points
-)
+# domain = pinns.PolygonDomain(vertices=[(0, 0), (1, 1), (1, 0)])
+# domain = pinns.RectangularDomain(x_range=(0, 1), y_range=(0, 1))
 
+domain.training_data_plot()
 
 # 2. Define problem
 problem = pinns.PDEProblem(
-    residual_fn=my_pde_residual,
-    boundary_conditions={"dirichlet": 0.0}
+    residual_fn=my_pde_residual, boundary_conditions={"dirichlet": 0.0}
 )
 
 # 3. Create PINN (network + loss only)
-pinn = pinns.PINN(
-    problem=problem,
-    input_dim=2, hidden_dim=50, output_dim=1,
-    num_hidden_layers=4, activation="tanh"
+networks = pinns.NeuralNet(
+    input_dim=2,
+    hidden_dim=50,
+    output_dim=1,
+    num_hidden_layers=4,
+    activation="tanh",
 )
 
 # 4. Create trainer with strategy
 trainer = pinns.Trainer(
-    pinn=pinn,
+    networks=networks,
+    problem=problem,
     domain=domain,
     optimizer_config={"type": "adam", "lr": 1e-2},
-    strategy="standard"  # or pinns.AdaptiveSamplingStrategy()
+    strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
 )
 
 # 5. Train
@@ -109,11 +109,11 @@ x = np.linspace(-1, 1, n)
 y = np.linspace(-1, 1, n)
 X, Y = np.meshgrid(x, y)
 XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=pinn.dtype).to(pinn.device)
+XY_tensor = torch.tensor(XY, dtype=networks.dtype).to(networks.device)
 
 # Predict using the trained model
 with torch.no_grad():
-    u_pred = pinn.network.forward(XY_tensor).cpu().numpy().reshape(n, n)
+    u_pred = networks.forward(XY_tensor).cpu().numpy().reshape(n, n)
 
 # Compute the real solution
 p = 2.0  # Make sure this matches your PDE
@@ -122,7 +122,7 @@ C = (p - 1) / p * N ** (1 / (1 - p))
 u_real = np.zeros_like(X)
 u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
 
-circular_mask = domain.create_visualization_mask(X, Y)
+circular_mask = domain.visualization_mask(X, Y)
 
 # Use visualization helpers for plotting and saving
 current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -134,26 +134,31 @@ os.makedirs(save_dir, exist_ok=True)
 # optimizer_type = getattr(trainer.optimizer, "adam")
 optimizer_type = "adam"
 save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
-torch.save(pinn.state_dict(), save_model_path)
+torch.save(networks.state_dict(), save_model_path)
 print(f"Model saved to {save_model_path}")
 
 # Loss curve
 save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
-pinns.TrainingDataVisualizer.loss_curve(results["loss_history"], save_path=save_loss_graph,
-                                        title="Loss function", show=False, dpi=150)
+pinns.loss_curve(
+    results["loss_history"],
+    save_path=save_loss_graph,
+    title="Loss function",
+    show=False,
+    dpi=150,
+)
 
 # Predictions and error figure
 save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
-pinns.TrainingDataVisualizer.prediction_and_error(
+pinns.prediction_and_error(
     X=X,
     Y=Y,
     u_pred=u_pred,
     u_real=u_real,
     mask=circular_mask,
     save_path=save_predictions_path,
-    cmap_pred='hsv',
-    cmap_real='hsv',
-    cmap_err='inferno',
+    cmap_pred="hsv",
+    cmap_real="hsv",
+    cmap_err="inferno",
     levels=50,
     dpi=450,
     show=False,

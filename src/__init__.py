@@ -5,7 +5,7 @@ A modular library for solving PDEs using physics-informed neural networks.
 """
 
 # Core components
-from .core.pinn import PINN
+from .core.neural_net import NeuralNet
 from .core.problem import PDEProblem
 
 # Geometry
@@ -18,25 +18,22 @@ from .training.strategies import StandardStrategy, AdaptiveSamplingStrategy
 # Configuration
 from .config.experiment import ExperimentConfig
 
-# Models (existing - keep as is for now)
-from .models.networks import NeuralNet
-
 # Utils (existing - keep as is for now)
-from .utils.visualization import TrainingDataVisualizer
+from .utils.visualization import *
 
 __version__ = "0.2.0"
 
 __all__ = [
     # Core
-    'PINN', 'PDEProblem',
+    'NeuralNet', 'PDEProblem',
     # Geometry
     'CircularDomain', 'PolygonDomain', 'RectangularDomain',
     # Training
     'Trainer', 'StandardStrategy', 'AdaptiveSamplingStrategy',
     # Config
     'ExperimentConfig',
-    # Models
-    'NeuralNet',
     # Utils
-    'TrainingDataVisualizer'
+    'training_data_plot',
+    'loss_curve',
+    'prediction_and_error'
 ]
