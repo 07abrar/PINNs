@@ -1,38 +1,35 @@
-import time
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, Optional
+
 import torch
 
-from .strategies import StandardStrategy
-from ..config.experiment import ExperimentConfig
+from src.config.experiment import ExperimentConfig
+from src.core.neural_net import NeuralNet
+from src.core.problem import PDEProblem
+from src.geometry.domains import Domain
+from src.training.strategies import StandardStrategy
 
 
 class Trainer:
     """
     Main training orchestrator
-
-    Responsibilities:
-    - Coordinate training process
-    - Handle data generation via Domain
-    - Execute training strategies
-    - Manage logging and saving
     """
 
     def __init__(
         self,
-        pinn,           # PINN instance
-        domain,         # Domain instance
+        networks: NeuralNet,
+        problem: PDEProblem,
+        domain: Domain,
         optimizer_config: Dict[str, Any],
         strategy="standard",
-        experiment_config: Optional[ExperimentConfig] = None
+        experiment_config: Optional[ExperimentConfig] = None,
     ):
-        self.pinn = pinn
+        self.networks = networks
+        self.problem = problem
         self.domain = domain
         self.experiment_config = experiment_config or ExperimentConfig()
 
-        # Create optimizer
         self._create_optimizer(optimizer_config)
 
-        # Set training strategy
         if isinstance(strategy, str):
             if strategy == "standard":
                 self.strategy = StandardStrategy()
@@ -48,9 +45,9 @@ class Trainer:
 
         if optimizer_type == "adam":
             self.optimizer = torch.optim.Adam(
-                self.pinn.parameters(),
+                self.networks.parameters(),
                 lr=lr,
-                weight_decay=config.get("weight_decay", 1e-6)
+                weight_decay=config.get("weight_decay", 1e-6),
             )
         else:
             raise ValueError(f"Unsupported optimizer: {optimizer_type}")
@@ -60,7 +57,7 @@ class Trainer:
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """Execute training process"""
 
@@ -70,21 +67,28 @@ class Trainer:
 
         # Convert to tensors
         boundary_points = torch.tensor(
-            boundary_points, dtype=self.pinn.dtype, device=self.pinn.device)
+            boundary_points,
+            dtype=self.networks.dtype,
+            device=self.networks.device,
+        )
         collocation_points = torch.tensor(
-            collocation_points, dtype=self.pinn.dtype, device=self.pinn.device)
+            collocation_points,
+            dtype=self.networks.dtype,
+            device=self.networks.device,
+        )
 
         # Get boundary values from problem
         boundary_values = torch.full(
             (len(boundary_points), 1),
-            self.pinn.problem.get_boundary_value(),
-            dtype=self.pinn.dtype,
-            device=self.pinn.device
+            self.problem.get_boundary_value(),
+            dtype=self.networks.dtype,
+            device=self.networks.device,
         )
 
         # Execute training strategy
-        results = self.strategy.train(
-            pinn=self.pinn,
+        return self.strategy.train(
+            networks=self.networks,
+            problem=self.problem,
             optimizer=self.optimizer,
             boundary_points=boundary_points,
             boundary_values=boundary_values,
@@ -92,7 +96,5 @@ class Trainer:
             epochs=epochs,
             loss_threshold=loss_threshold,
             bc_weight=bc_weight,
-            **kwargs
+            **kwargs,
         )
-
-        return results
