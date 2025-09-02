@@ -5,6 +5,8 @@ import numpy as np
 import shapely.geometry as sg
 from scipy.stats import qmc
 
+from src.utils.visualization import training_data_plot
+
 
 class Domain(ABC):
     """Base class for all computational domains"""
@@ -20,8 +22,14 @@ class Domain(ABC):
         """Get points inside the domain"""
 
     @abstractmethod
-    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
+    def visualization_mask(
+        self, x_grid: np.ndarray, y_grid: np.ndarray
+    ) -> np.ndarray:
         """Create mask for visualization (True = inside domain)"""
+
+    @abstractmethod
+    def training_data_plot(self, save_path: str = None) -> None:
+        """Plot training data points"""
 
 
 class CircularDomain(Domain):
@@ -70,17 +78,30 @@ class CircularDomain(Domain):
 
         return points
 
-    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
+    def visualization_mask(
+        self, x_grid: np.ndarray, y_grid: np.ndarray
+    ) -> np.ndarray:
         """Create a mask for points inside the circle"""
         dx = x_grid - self.center[0]
         dy = y_grid - self.center[1]
         return (dx**2 + dy**2) <= self.radius**2
 
+    def training_data_plot(self, save_path: str = None) -> None:
+        """Plot training data points"""
+        training_data_plot(
+            self.boundary_points,
+            self.collocation_points,
+            self.visualization_mask,
+            save_path,
+        )
+
 
 class PolygonDomain(Domain):
     """Polygon domain using Shapely for geometry operations"""
 
-    def __init__(self, vertices: List[Tuple[float, float]], training_data: dict = None):
+    def __init__(
+        self, vertices: List[Tuple[float, float]], training_data: dict = None
+    ):
         """
         Initialize polygon from vertices
         vertices: [(x1,y1), (x2,y2), ..., (xn,yn)]
@@ -108,9 +129,11 @@ class PolygonDomain(Domain):
         """Generate points on polygon boundary with proportional distribution"""
         n_points = self.training_data["boundary"]
         boundary = self._geometry.exterior
-        boundary_coords = np.array(boundary.coords[:-1])
+        boundary_coords = np.array(boundary.coords[:])
         if len(boundary_coords) >= n_points:
-            indices = np.linspace(0, len(boundary_coords) - 1, n_points, dtype=int)
+            indices = np.linspace(
+                0, len(boundary_coords) - 1, n_points, dtype=int
+            )
             return boundary_coords[indices]
 
         # Calculate edge lengths for proportional distribution
@@ -144,7 +167,9 @@ class PolygonDomain(Domain):
         while len(points) < n_points and attempts < max_attempts:
             # Generate random points in bounding box
             candidates = np.random.uniform(
-                low=[minx, miny], high=[maxx, maxy], size=(n_points - len(points), 2)
+                low=[minx, miny],
+                high=[maxx, maxy],
+                size=(n_points - len(points), 2),
             )
 
             # Check which points are inside polygon
@@ -163,7 +188,9 @@ class PolygonDomain(Domain):
 
         return np.array(points)
 
-    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
+    def visualization_mask(
+        self, x_grid: np.ndarray, y_grid: np.ndarray
+    ) -> np.ndarray:
         """Create a mask for points inside the polygon"""
         mask = np.zeros_like(x_grid, dtype=bool)
         flat_points = np.column_stack((x_grid.ravel(), y_grid.ravel()))
@@ -173,6 +200,15 @@ class PolygonDomain(Domain):
             mask.flat[i] = self._geometry.contains(sg.Point(point))
 
         return mask
+
+    def training_data_plot(self, save_path: str = None) -> None:
+        """Plot training data points"""
+        training_data_plot(
+            self.boundary_points,
+            self.collocation_points,
+            self.visualization_mask,
+            save_path,
+        )
 
 
 class RectangularDomain(Domain):
@@ -274,11 +310,22 @@ class RectangularDomain(Domain):
 
         return points
 
-    def visualization_mask(self, x_grid: np.ndarray, y_grid: np.ndarray) -> np.ndarray:
+    def visualization_mask(
+        self, x_grid: np.ndarray, y_grid: np.ndarray
+    ) -> np.ndarray:
         """Create rectangular mask for plotting"""
         return (
             (x_grid >= self.x_range[0])
             & (x_grid <= self.x_range[1])
             & (y_grid >= self.y_range[0])
             & (y_grid <= self.y_range[1])
+        )
+
+    def training_data_plot(self, save_path: str = None) -> None:
+        """Plot training data points"""
+        training_data_plot(
+            self.boundary_points,
+            self.collocation_points,
+            self.visualization_mask,
+            save_path,
         )
