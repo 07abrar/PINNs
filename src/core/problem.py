@@ -1,6 +1,6 @@
 """PDE problem definitions."""
 
-from typing import Any, Callable, Dict
+from typing import Callable, Dict
 
 import torch
 
@@ -25,9 +25,9 @@ class PDEProblem:
     def compute_residual(
         self, coords: torch.Tensor, u_pred: torch.Tensor
     ) -> torch.Tensor:
-        """Compute PDE residual at ``coords`` using ``u_pred``."""
+        """Compute PDE residual at `coords` using `u_pred`."""
         return self.residual_fn(coords, u_pred)
 
     def get_boundary_value(self, boundary_type: str = "dirichlet") -> float:
-        """Return boundary condition value for ``boundary_type``."""
+        """Return boundary condition value for `boundary_type`."""
         return self.boundary_conditions.get(boundary_type, 0.0)

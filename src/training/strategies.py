@@ -1,13 +1,14 @@
 """Training strategy implementations."""
 
 from abc import ABC, abstractmethod
+import math
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
-from tqdm.auto import trange
 
 import torch
 from torch import optim
+from tqdm.auto import tqdm
 
 from src.core.neural_net import NeuralNet
 from src.core.problem import PDEProblem
@@ -44,29 +45,30 @@ class StandardStrategy(TrainingStrategy):
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        print_every: int = 100,
-        use_tqdm: bool = False,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Standard training loop"""
 
         model.train()
-        loss_history: list[float] = []
+        loss_history: List[float] = []
         start_time = time.time()
 
-        progress = trange(
-            epochs,
-            desc="Training",
-            unit="epoch",
-            disable=not use_tqdm,
+        # Display smoothing + cadence
+        ema_alpha = 0.1
+        show_every = 1
+        pbar = tqdm(
+            total=1.0,
+            desc=f"Loss → {loss_threshold:.1e}",
+            unit="frac",
+            dynamic_ncols=True,
+            mininterval=0.3,
+            leave=False,
         )
+        ema = None
+        baseline = None  # first EMA, anchors the progress scale
+        denom = None
 
-        if not use_tqdm:
-            print("Starting training...")
-            print("Epoch - Total Loss - PDE Loss - Boundary Loss")
-            print("-" * 50)
-
-        for epoch in progress:
+        for epoch in range(epochs):
             optimizer.zero_grad()
 
             # Compute losses
@@ -84,27 +86,42 @@ class StandardStrategy(TrainingStrategy):
             optimizer.step()
 
             # Record loss
-            current_loss = losses["total_loss"].item()
-            loss_history.append(current_loss)
+            val = losses["total_loss"].item()
+            loss_history.append(val)
 
-            if use_tqdm:
-                progress.set_postfix(
-                    total=losses["total_loss"].item(),
-                    pde=losses["pde_loss"].item(),
-                    boundary=losses["boundary_loss"].item(),
-                )
-            elif epoch % print_every == 0:
-                print(
-                    f"{epoch:5d} - {losses['total_loss'].item():.6f} - "
-                    f"{losses['pde_loss'].item():.6f} - {losses['boundary_loss'].item():.6f}"
-                )
+            # EMA for stable display + stopping
+            ema = val if ema is None else (
+                1 - ema_alpha) * ema + ema_alpha * val
 
-            # Check convergence
-            if current_loss < loss_threshold:
-                print(
-                    f"Converged at epoch {epoch} with loss {current_loss:.6f}"
+            # Initialize progress scale on first step
+            if baseline is None:
+                # Ensure baseline is above threshold to avoid zero denom
+                baseline = max(ema, loss_threshold * 1.01)
+                denom = max(1e-12, math.log(baseline) -
+                            math.log(loss_threshold))
+
+            # Fraction toward threshold on log scale, clipped to [0,1]
+            frac = (math.log(baseline) - math.log(max(ema, 1e-20))) / denom
+            frac = 0.0 if math.isnan(frac) else max(0.0, min(1.0, frac))
+
+            if epoch % show_every == 0:
+                pbar.set_postfix(
+                    # ema=f"{ema:.2e}",
+                    total=f"{val:.2e}",
+                    pde=f"{losses['pde_loss'].item():.2e}",
+                    bc=f"{losses['boundary_loss'].item():.2e}",
                 )
+            # set bar to current fraction (update expects a delta)
+            pbar.update(frac - pbar.n)
+
+            # Convergence on EMA to avoid flicker
+            if ema < loss_threshold:
+                msg = f"Converged at epoch {epoch} with EMA {ema:.3e} < {loss_threshold:.3e}"
+                pbar.set_postfix_str("early_stop")
+                tqdm.write(msg)
                 break
+
+        pbar.close()
 
         elapsed = time.time() - start_time
         model.eval()

@@ -45,7 +45,8 @@ def training_data_plot(
     x_grid, y_grid = np.meshgrid(x, y)
     mask_values = mask(x_grid, y_grid)
 
-    plt.contour(x_grid, y_grid, mask_values, levels=[0.5], colors="green", linewidths=2)
+    plt.contour(x_grid, y_grid, mask_values, levels=[
+                0.5], colors="green", linewidths=2)
     plt.axis("equal")
     plt.legend()
     plt.xlabel("x")
@@ -108,7 +109,8 @@ def prediction_and_error(
     # Apply mask if provided
     if mask is not None:
         u_pred_plot = np.ma.array(u_pred, mask=~mask)
-        u_real_plot = np.ma.array(u_real, mask=~mask) if u_real is not None else None
+        u_real_plot = np.ma.array(
+            u_real, mask=~mask) if u_real is not None else None
         err_plot = (
             np.ma.array(np.abs(u_pred - u_real), mask=~mask)
             if u_real is not None

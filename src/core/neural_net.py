@@ -13,7 +13,7 @@ class NeuralNet(nn.Module):
         hidden_dim: Width of each hidden layer.
         output_dim: Number of output features.
         num_hidden_layers: Number of hidden layers.
-        activation: Activation function name (``'tanh'``, ``'relu'`` ...).
+        activation: Activation function name (`tanh`, `relu`, ...).
         device: Device on which tensors should be allocated.
         dtype: Default tensor data type.
     """
@@ -47,7 +47,11 @@ class NeuralNet(nn.Module):
             "softplus": F.softplus,
         }
         if activation not in activations:
-            raise ValueError(f"Unsupported activation function: {activation}")
+            supported_activations = list(activations.keys())
+            raise ValueError(
+                f"Unsupported activation function: '{activation}'. "
+                f"Supported activations are: {supported_activations}"
+            )
         self.activation = activations[activation]
 
         # Default loss function used by training strategies

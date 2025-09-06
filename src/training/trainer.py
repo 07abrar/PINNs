@@ -1,6 +1,6 @@
 """Training utilities."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import torch
 
@@ -20,7 +20,7 @@ class Trainer:
         problem: PDEProblem,
         domain: Domain,
         optimizer_config: Dict[str, Any],
-        strategy: str | TrainingStrategy = "standard",
+        strategy: Union[str, TrainingStrategy] = "standard",
         experiment_config: Optional[ExperimentConfig] = None,
     ) -> None:
         self.model = model
@@ -57,7 +57,6 @@ class Trainer:
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        use_tqdm: bool = False,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute training process"""
@@ -97,6 +96,5 @@ class Trainer:
             epochs=epochs,
             loss_threshold=loss_threshold,
             bc_weight=bc_weight,
-            use_tqdm=use_tqdm,
             **kwargs,
         )

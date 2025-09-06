@@ -98,7 +98,7 @@ trainer = pinns.Trainer(
     strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
 )
 # 5. Train
-results = trainer.train(epochs=1000, loss_threshold=1e-4, use_tqdm=True)
+results = trainer.train(epochs=10000, loss_threshold=1e-5)
 
 # 6. Fix later
 
@@ -162,4 +162,3 @@ pinns.prediction_and_error(
     dpi=450,
     show=False,
 )
-
