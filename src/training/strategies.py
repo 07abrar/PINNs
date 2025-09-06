@@ -1,9 +1,14 @@
+"""Training strategy implementations."""
+
 from abc import ABC, abstractmethod
+import math
 import time
-from typing import Dict, Any
+from typing import Any, Dict, List
+
 
 import torch
 from torch import optim
+from tqdm.auto import tqdm
 
 from src.core.neural_net import NeuralNet
 from src.core.problem import PDEProblem
@@ -15,13 +20,13 @@ class TrainingStrategy(ABC):
     @abstractmethod
     def train(
         self,
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         optimizer: optim.Optimizer,
         boundary_points: torch.Tensor,
         boundary_values: torch.Tensor,
         collocation_points: torch.Tensor,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute the training strategy"""
 
@@ -31,7 +36,7 @@ class StandardStrategy(TrainingStrategy):
 
     def train(
         self,
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         optimizer: optim.Optimizer,
         boundary_points: torch.Tensor,
@@ -40,25 +45,35 @@ class StandardStrategy(TrainingStrategy):
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        print_every: int = 100,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Standard training loop"""
 
-        networks.train()
-        loss_history = []
+        model.train()
+        loss_history: List[float] = []
         start_time = time.time()
 
-        print("Starting training...")
-        print("Epoch - Total Loss - PDE Loss - Boundary Loss")
-        print("-" * 50)
+        # Display smoothing + cadence
+        ema_alpha = 0.1
+        show_every = 1
+        pbar = tqdm(
+            total=1.0,
+            desc=f"Loss → {loss_threshold:.1e}",
+            unit="frac",
+            dynamic_ncols=True,
+            mininterval=0.3,
+            leave=False,
+        )
+        ema = None
+        baseline = None  # first EMA, anchors the progress scale
+        denom = None
 
         for epoch in range(epochs):
             optimizer.zero_grad()
 
             # Compute losses
             losses = self.__compute_total_loss(
-                networks,
+                model,
                 problem,
                 collocation_points,
                 boundary_points,
@@ -71,25 +86,45 @@ class StandardStrategy(TrainingStrategy):
             optimizer.step()
 
             # Record loss
-            current_loss = losses["total_loss"].item()
-            loss_history.append(current_loss)
+            val = losses["total_loss"].item()
+            loss_history.append(val)
 
-            # Print progress
-            if epoch % print_every == 0:
-                print(
-                    f"{epoch:5d} - {losses['total_loss'].item():.6f} - "
-                    f"{losses['pde_loss'].item():.6f} - {losses['boundary_loss'].item():.6f}"
-                )
+            # EMA for stable display + stopping
+            ema = val if ema is None else (
+                1 - ema_alpha) * ema + ema_alpha * val
 
-            # Check convergence
-            if current_loss < loss_threshold:
-                print(
-                    f"Converged at epoch {epoch} with loss {current_loss:.6f}"
+            # Initialize progress scale on first step
+            if baseline is None:
+                # Ensure baseline is above threshold to avoid zero denom
+                baseline = max(ema, loss_threshold * 1.01)
+                denom = max(1e-12, math.log(baseline) -
+                            math.log(loss_threshold))
+
+            # Fraction toward threshold on log scale, clipped to [0,1]
+            frac = (math.log(baseline) - math.log(max(ema, 1e-20))) / denom
+            frac = 0.0 if math.isnan(frac) else max(0.0, min(1.0, frac))
+
+            if epoch % show_every == 0:
+                pbar.set_postfix(
+                    # ema=f"{ema:.2e}",
+                    total=f"{val:.2e}",
+                    pde=f"{losses['pde_loss'].item():.2e}",
+                    bc=f"{losses['boundary_loss'].item():.2e}",
                 )
+            # set bar to current fraction (update expects a delta)
+            pbar.update(frac - pbar.n)
+
+            # Convergence on EMA to avoid flicker
+            if ema < loss_threshold:
+                msg = f"Converged at epoch {epoch} with EMA {ema:.3e} < {loss_threshold:.3e}"
+                pbar.set_postfix_str("early_stop")
+                tqdm.write(msg)
                 break
 
+        pbar.close()
+
         elapsed = time.time() - start_time
-        networks.eval()
+        model.eval()
 
         return {
             "loss_history": loss_history,
@@ -103,33 +138,33 @@ class StandardStrategy(TrainingStrategy):
 
     @staticmethod
     def __compute_pde_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         collocation_points: torch.Tensor,
     ) -> torch.Tensor:
         """Compute PDE residual loss"""
         coords = collocation_points.clone().detach().requires_grad_(True)
-        u_pred = networks.forward(coords)
+        u_pred = model.forward(coords)
 
         # Use the problem's residual function
         residual = problem.compute_residual(coords, u_pred)
         target = torch.zeros_like(residual)
 
-        return networks.mse_loss(residual, target)
+        return model.mse_loss(residual, target)
 
     @staticmethod
     def __compute_boundary_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         boundary_points: torch.Tensor,
         boundary_values: torch.Tensor,
     ) -> torch.Tensor:
         """Compute boundary condition loss"""
-        u_pred = networks.forward(boundary_points)
-        return networks.mse_loss(u_pred, boundary_values)
+        u_pred = model.forward(boundary_points)
+        return model.mse_loss(u_pred, boundary_values)
 
     @staticmethod
     def __compute_total_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         collocation_points: torch.Tensor,
         boundary_points: torch.Tensor,
@@ -138,10 +173,10 @@ class StandardStrategy(TrainingStrategy):
     ) -> Dict[str, torch.Tensor]:
         """Compute total weighted loss"""
         pde_loss = StandardStrategy.__compute_pde_loss(
-            networks, problem, collocation_points
+            model, problem, collocation_points
         )
         boundary_loss = StandardStrategy.__compute_boundary_loss(
-            networks, boundary_points, boundary_values
+            model, boundary_points, boundary_values
         )
         total_loss = bc_weight * boundary_loss + pde_loss
 
@@ -155,7 +190,7 @@ class StandardStrategy(TrainingStrategy):
 class AdaptiveSamplingStrategy(TrainingStrategy):
     """Adaptive sampling training strategy - placeholder"""
 
-    def train(self, **kwargs) -> Dict[str, Any]:
+    def train(self, **kwargs: Any) -> Dict[str, Any]:
         """Placeholder for adaptive sampling"""
         print("Adaptive sampling strategy not yet implemented")
         # Fall back to standard strategy for now

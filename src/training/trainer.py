@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional
+"""Training utilities."""
+
+from typing import Any, Dict, Optional, Union
 
 import torch
 
@@ -6,24 +8,22 @@ from src.config.experiment import ExperimentConfig
 from src.core.neural_net import NeuralNet
 from src.core.problem import PDEProblem
 from src.geometry.domains import Domain
-from src.training.strategies import StandardStrategy
+from src.training.strategies import StandardStrategy, TrainingStrategy
 
 
 class Trainer:
-    """
-    Main training orchestrator
-    """
+    """High level training orchestrator for PINN models."""
 
     def __init__(
         self,
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         domain: Domain,
         optimizer_config: Dict[str, Any],
-        strategy="standard",
+        strategy: Union[str, TrainingStrategy] = "standard",
         experiment_config: Optional[ExperimentConfig] = None,
-    ):
-        self.networks = networks
+    ) -> None:
+        self.model = model
         self.problem = problem
         self.domain = domain
         self.experiment_config = experiment_config or ExperimentConfig()
@@ -38,14 +38,14 @@ class Trainer:
         else:
             self.strategy = strategy
 
-    def _create_optimizer(self, config: Dict[str, Any]):
+    def _create_optimizer(self, config: Dict[str, Any]) -> None:
         """Create optimizer from config"""
         optimizer_type = config.get("type", "adam").lower()
         lr = config.get("lr", 1e-3)
 
         if optimizer_type == "adam":
             self.optimizer = torch.optim.Adam(
-                self.networks.parameters(),
+                self.model.parameters(),
                 lr=lr,
                 weight_decay=config.get("weight_decay", 1e-6),
             )
@@ -57,7 +57,7 @@ class Trainer:
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute training process"""
 
@@ -68,26 +68,26 @@ class Trainer:
         # Convert to tensors
         boundary_points = torch.tensor(
             boundary_points,
-            dtype=self.networks.dtype,
-            device=self.networks.device,
+            dtype=self.model.dtype,
+            device=self.model.device,
         )
         collocation_points = torch.tensor(
             collocation_points,
-            dtype=self.networks.dtype,
-            device=self.networks.device,
+            dtype=self.model.dtype,
+            device=self.model.device,
         )
 
         # Get boundary values from problem
         boundary_values = torch.full(
             (len(boundary_points), 1),
             self.problem.get_boundary_value(),
-            dtype=self.networks.dtype,
-            device=self.networks.device,
+            dtype=self.model.dtype,
+            device=self.model.device,
         )
 
         # Execute training strategy
         return self.strategy.train(
-            networks=self.networks,
+            model=self.model,
             problem=self.problem,
             optimizer=self.optimizer,
             boundary_points=boundary_points,
