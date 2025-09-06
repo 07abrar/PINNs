@@ -6,6 +6,12 @@ from torch import autograd
 
 import src as pinns
 
+# Create directory to save results
+current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
+os.makedirs(save_dir, exist_ok=True)
+
 
 def my_pde_residual(coords: torch.Tensor, u_pred: torch.Tensor) -> torch.Tensor:
     """
@@ -63,16 +69,17 @@ def my_pde_residual(coords: torch.Tensor, u_pred: torch.Tensor) -> torch.Tensor:
 
 
 # 1. Define domain
-domain = pinns.CircularDomain(
-    center=(0, 0),
-    radius=1,
-    training_data={"boundary": 100, "collocation": 1000},
-)
+# domain = pinns.CircularDomain(
+#     center=(0, 0),
+#     radius=1,
+#     training_data={"boundary": 100, "collocation": 1000},
+# )
 # or
 # domain = pinns.PolygonDomain(vertices=[(0, 0), (1, 1), (1, 0)])
-# domain = pinns.RectangularDomain(x_range=(0, 1), y_range=(0, 1))
+domain = pinns.RectangularDomain(x_range=(0, 1), y_range=(0, 1))
 
-domain.training_data_plot()
+save_training_data_plot_path = os.path.join(save_dir, "training_data_plot.png")
+domain.training_data_plot(save_path=save_training_data_plot_path)
 
 # 2. Define problem
 problem = pinns.PDEProblem(
@@ -97,15 +104,9 @@ trainer = pinns.Trainer(
     strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
 )
 # 5. Train
-results = trainer.train(epochs=10000, loss_threshold=1e-5)
+results = trainer.train(epochs=2500, loss_threshold=1e-4)
 
 # 6. Visualization and saving
-
-# Use visualization helpers for plotting and saving
-current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
-os.makedirs(save_dir, exist_ok=True)
 
 # Save the model
 # optimizer_type = getattr(trainer.optimizer, "adam")
@@ -129,6 +130,7 @@ save_surface_path = os.path.join(save_dir, "prediction_surface.png")
 pinns.prediction_surface(
     model=model,
     domain=domain,
+    plot_type="2d",
     save_path=save_surface_path,
     cmap="hsv",
     dpi=450,

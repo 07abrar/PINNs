@@ -45,7 +45,7 @@ def training_data_plot(
     mask_values = mask(x_grid, y_grid)
 
     plt.contour(x_grid, y_grid, mask_values, levels=[
-                0.5], colors="green", linewidths=2)
+                0.5], colors="green", linewidths=1)
     plt.axis("equal")
     plt.legend()
     plt.xlabel("x")
@@ -193,12 +193,13 @@ def __prepare_plotting_grid(
 def prediction_surface(
     model: torch.nn.Module,
     domain: Any,
+    plot_type: str = "2d",
     save_path: str | None = None,
     cmap: str = "viridis",
     dpi: int = 300,
     show: bool = False,
 ) -> None:
-    """Plot the model prediction as a 3D surface."""
+    """Plot the model prediction as a 2D or 3D surface."""
 
     mask_fn = domain.visualization_mask
     if mask_fn is None:
@@ -214,14 +215,27 @@ def prediction_surface(
 
     u_pred = np.where(mask, u_pred, np.nan)
 
-    fig = plt.figure(figsize=(6, 5))
-    ax = fig.add_subplot(1, 1, 1, projection="3d")
-    surf = ax.plot_surface(X, Y, u_pred, cmap=cmap, linewidth=0)
-    fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label="u_pred")
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("u")
-    ax.set_title("Model Prediction")
+    fig = plt.figure(figsize=(8, 8))
+
+    if plot_type in ["3d", "3D"]:
+        ax = fig.add_subplot(1, 1, 1, projection="3d")
+        surf = ax.plot_surface(X, Y, u_pred, cmap=cmap, linewidth=0)
+        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label="u_pred")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("u")
+        ax.set_title("Model Prediction")
+    elif plot_type in ["2d", "2D"]:
+        ax = fig.add_subplot(1, 1, 1)
+        contour = ax.contourf(X, Y, u_pred, levels=50, cmap=cmap)
+        fig.colorbar(contour, ax=ax, shrink=0.6, aspect=14, label="u_pred")
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.grid(True)
+        ax.set_title("Model Prediction")
+    else:
+        raise ValueError("plot_type must be either '2d' or '3d'")
 
     if save_path:
         fig.savefig(save_path, bbox_inches="tight", dpi=dpi)
