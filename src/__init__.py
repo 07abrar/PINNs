@@ -35,5 +35,7 @@ __all__ = [
     # Utils
     'training_data_plot',
     'loss_curve',
-    'prediction_and_error'
+    'prediction_and_error',
+    'prediction_surface',
+    'domain_loss_heatmap',
 ]

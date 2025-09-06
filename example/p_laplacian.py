@@ -1,7 +1,6 @@
 from datetime import datetime
 import os
 
-import numpy as np
 import torch
 from torch import autograd
 
@@ -100,28 +99,7 @@ trainer = pinns.Trainer(
 # 5. Train
 results = trainer.train(epochs=10000, loss_threshold=1e-5)
 
-# 6. Fix later
-
-# Define a grid over input domain
-n = 100  # grid resolution
-x = np.linspace(-1, 1, n)
-y = np.linspace(-1, 1, n)
-X, Y = np.meshgrid(x, y)
-XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=model.dtype).to(model.device)
-
-# Predict using the trained model
-with torch.no_grad():
-    u_pred = model.forward(XY_tensor).cpu().numpy().reshape(n, n)
-
-# Compute the real solution
-p = 2.0  # Make sure this matches your PDE
-N = 2
-C = (p - 1) / p * N ** (1 / (1 - p))
-u_real = np.zeros_like(X)
-u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
-
-circular_mask = domain.visualization_mask(X, Y)
+# 6. Visualization and saving
 
 # Use visualization helpers for plotting and saving
 current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -146,19 +124,27 @@ pinns.loss_curve(
     dpi=150,
 )
 
-# Predictions and error figure
-save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
-pinns.prediction_and_error(
-    X=X,
-    Y=Y,
-    u_pred=u_pred,
-    u_real=u_real,
-    mask=circular_mask,
-    save_path=save_predictions_path,
-    cmap_pred="hsv",
-    cmap_real="hsv",
-    cmap_err="inferno",
-    levels=50,
+# Prediction surface
+save_surface_path = os.path.join(save_dir, "prediction_surface.png")
+pinns.prediction_surface(
+    model=model,
+    domain=domain,
+    mask_fn=domain.visualization_mask,
+    save_path=save_surface_path,
+    cmap="hsv",
+    dpi=450,
+    show=False,
+)
+
+# Domain loss heatmap
+save_domain_loss_path = os.path.join(save_dir, "domain_loss_heatmap.png")
+pinns.domain_loss_heatmap(
+    model=model,
+    problem=problem,
+    domain=domain,
+    mask_fn=domain.visualization_mask,
+    save_path=save_domain_loss_path,
+    cmap="inferno",
     dpi=450,
     show=False,
 )
