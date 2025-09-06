@@ -129,7 +129,6 @@ save_surface_path = os.path.join(save_dir, "prediction_surface.png")
 pinns.prediction_surface(
     model=model,
     domain=domain,
-    mask_fn=domain.visualization_mask,
     save_path=save_surface_path,
     cmap="hsv",
     dpi=450,
@@ -142,7 +141,6 @@ pinns.domain_loss_heatmap(
     model=model,
     problem=problem,
     domain=domain,
-    mask_fn=domain.visualization_mask,
     save_path=save_domain_loss_path,
     cmap="inferno",
     dpi=450,

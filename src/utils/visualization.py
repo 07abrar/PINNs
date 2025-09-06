@@ -5,7 +5,6 @@ from typing import Any, Callable, Iterable
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
 
 def training_data_plot(
@@ -14,9 +13,7 @@ def training_data_plot(
     mask: Callable[[np.ndarray, np.ndarray], np.ndarray],
     save_path: str | None = None,
 ) -> None:
-    """
-    Visualize the boundary and collocation points.
-    """
+    """Visualize the boundary and collocation points."""
 
     plt.figure(figsize=(8, 8))
     plt.title("Boundary Data Points and Collocation Points")
@@ -71,13 +68,7 @@ def loss_curve(
     show: bool = False,
     dpi: int = 150,
 ):
-    """Plot training loss curve.
-
-    Returns
-    -------
-    tuple[plt.Figure, plt.Axes]
-        Matplotlib figure and axes containing the plot.
-    """
+    """Plot training loss curve."""
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -178,27 +169,12 @@ def prediction_and_error(
     plt.close()
 
 
-def _prepare_plotting_grid(
+def __prepare_plotting_grid(
     domain: Any,
     mask_fn: Callable[[np.ndarray, np.ndarray], np.ndarray],
     resolution: float = 50,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Generate a meshgrid and mask covering the domain.
-
-    Parameters
-    ----------
-    domain:
-        Domain object providing boundary and collocation points.
-    mask_fn:
-        Function that returns a boolean mask given X and Y grids.
-    resolution:
-        Points per unit length for the generated grid.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray, np.ndarray]
-        Meshgrid arrays ``X`` and ``Y`` and a boolean ``mask``.
-    """
+    """Generate a meshgrid and mask covering the domain."""
 
     boundary_points = domain.boundary_points
     collocation_points = domain.collocation_points
@@ -217,7 +193,6 @@ def _prepare_plotting_grid(
 def prediction_surface(
     model: torch.nn.Module,
     domain: Any,
-    mask_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None,
     save_path: str | None = None,
     cmap: str = "viridis",
     dpi: int = 300,
@@ -225,12 +200,14 @@ def prediction_surface(
 ) -> None:
     """Plot the model prediction as a 3D surface."""
 
+    mask_fn = domain.visualization_mask
     if mask_fn is None:
         raise ValueError("mask_fn must be provided")
 
-    X, Y, mask = _prepare_plotting_grid(domain, mask_fn)
+    X, Y, mask = __prepare_plotting_grid(domain, mask_fn)
     XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-    XY_tensor = torch.tensor(XY, dtype=model.dtype, device=model.device)
+    param = next(model.parameters())
+    XY_tensor = torch.tensor(XY, dtype=param.dtype, device=param.device)
 
     with torch.no_grad():
         u_pred = model.forward(XY_tensor).cpu().numpy().reshape(X.shape)
@@ -258,7 +235,6 @@ def domain_loss_heatmap(
     model: torch.nn.Module,
     problem: Any,
     domain: Any,
-    mask_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] | None,
     save_path: str | None = None,
     cmap: str = "inferno",
     dpi: int = 300,
@@ -266,12 +242,15 @@ def domain_loss_heatmap(
 ) -> None:
     """Plot squared residual (domain loss) as a 2D heatmap."""
 
+    mask_fn = domain.visualization_mask
     if mask_fn is None:
         raise ValueError("mask_fn must be provided")
 
-    X, Y, mask = _prepare_plotting_grid(domain, mask_fn)
+    X, Y, mask = __prepare_plotting_grid(domain, mask_fn)
     XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-    XY_tensor = torch.tensor(XY, dtype=model.dtype, device=model.device, requires_grad=True)
+    param = next(model.parameters())
+    XY_tensor = torch.tensor(XY, dtype=param.dtype,
+                             device=param.device, requires_grad=True)
 
     u_pred_tensor = model.forward(XY_tensor)
     if problem is not None:
