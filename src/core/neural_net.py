@@ -1,11 +1,21 @@
+"""Neural network architectures for PINNs."""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class NeuralNet(nn.Module):
-    """
-    A fully connected neural network for PINNs.
+    """Fully connected neural network used in PINNs.
+
+    Parameters:
+        input_dim: Number of input features.
+        hidden_dim: Width of each hidden layer.
+        output_dim: Number of output features.
+        num_hidden_layers: Number of hidden layers.
+        activation: Activation function name (``'tanh'``, ``'relu'`` ...).
+        device: Device on which tensors should be allocated.
+        dtype: Default tensor data type.
     """
 
     def __init__(
@@ -17,7 +27,7 @@ class NeuralNet(nn.Module):
         activation: str = "tanh",
         device: str = "cpu",
         dtype: torch.dtype = torch.float32,
-    ):
+    ) -> None:
         super().__init__()
 
         self.device = device
@@ -40,13 +50,12 @@ class NeuralNet(nn.Module):
             raise ValueError(f"Unsupported activation function: {activation}")
         self.activation = activations[activation]
 
-        # Loss function
+        # Default loss function used by training strategies
         self.mse_loss = nn.MSELoss()
 
-    def forward(self, x):
-        """Forward pass through the network"""
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute network outputs for the given input coordinates."""
         x = self.activation(self.input_layer(x))
         for hidden_layer in self.hidden_layers:
             x = self.activation(hidden_layer(x))
-        x = self.output_layer(x)
-        return x
+        return self.output_layer(x)

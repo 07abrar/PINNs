@@ -1,4 +1,7 @@
-from typing import Callable
+"""Visualization helpers for PINN experiments."""
+
+from typing import Callable, Iterable
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -6,9 +9,9 @@ import numpy as np
 def training_data_plot(
     boundary_points: np.ndarray,
     collocation_points: np.ndarray,
-    mask: Callable,
-    save_path=None,
-):
+    mask: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    save_path: str | None = None,
+) -> None:
     """
     Visualize the boundary and collocation points.
     """
@@ -57,7 +60,13 @@ def training_data_plot(
         plt.show()
 
 
-def loss_curve(loss_values, save_path=None, title="Loss function", show=False, dpi=150):
+def loss_curve(
+    loss_values: Iterable[float] | np.ndarray,
+    save_path: str | None = None,
+    title: str = "Loss function",
+    show: bool = False,
+    dpi: int = 150,
+) -> None:
     plt.figure(figsize=(8, 5))
     plt.title(title)
     plt.semilogy(loss_values, label="Training Loss")
@@ -73,19 +82,19 @@ def loss_curve(loss_values, save_path=None, title="Loss function", show=False, d
 
 
 def prediction_and_error(
-    X,
-    Y,
-    u_pred,
-    u_real=None,
-    mask=None,
-    save_path=None,
-    cmap_pred="hsv",
-    cmap_real="hsv",
-    cmap_err="inferno",
-    levels=50,
-    dpi=300,
-    show=False,
-):
+    X: np.ndarray,
+    Y: np.ndarray,
+    u_pred: np.ndarray,
+    u_real: np.ndarray | None = None,
+    mask: np.ndarray | None = None,
+    save_path: str | None = None,
+    cmap_pred: str = "hsv",
+    cmap_real: str = "hsv",
+    cmap_err: str = "inferno",
+    levels: int = 50,
+    dpi: int = 300,
+    show: bool = False,
+) -> None:
     """
     Plot model prediction, optional exact solution, and absolute error.
 

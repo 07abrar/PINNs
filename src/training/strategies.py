@@ -1,6 +1,10 @@
+"""Training strategy implementations."""
+
 from abc import ABC, abstractmethod
 import time
-from typing import Dict, Any
+from typing import Any, Dict
+
+from tqdm.auto import trange
 
 import torch
 from torch import optim
@@ -15,13 +19,13 @@ class TrainingStrategy(ABC):
     @abstractmethod
     def train(
         self,
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         optimizer: optim.Optimizer,
         boundary_points: torch.Tensor,
         boundary_values: torch.Tensor,
         collocation_points: torch.Tensor,
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute the training strategy"""
 
@@ -31,7 +35,7 @@ class StandardStrategy(TrainingStrategy):
 
     def train(
         self,
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         optimizer: optim.Optimizer,
         boundary_points: torch.Tensor,
@@ -41,24 +45,33 @@ class StandardStrategy(TrainingStrategy):
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
         print_every: int = 100,
-        **kwargs,
+        use_tqdm: bool = False,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Standard training loop"""
 
-        networks.train()
-        loss_history = []
+        model.train()
+        loss_history: list[float] = []
         start_time = time.time()
 
-        print("Starting training...")
-        print("Epoch - Total Loss - PDE Loss - Boundary Loss")
-        print("-" * 50)
+        progress = trange(
+            epochs,
+            desc="Training",
+            unit="epoch",
+            disable=not use_tqdm,
+        )
 
-        for epoch in range(epochs):
+        if not use_tqdm:
+            print("Starting training...")
+            print("Epoch - Total Loss - PDE Loss - Boundary Loss")
+            print("-" * 50)
+
+        for epoch in progress:
             optimizer.zero_grad()
 
             # Compute losses
             losses = self.__compute_total_loss(
-                networks,
+                model,
                 problem,
                 collocation_points,
                 boundary_points,
@@ -74,8 +87,13 @@ class StandardStrategy(TrainingStrategy):
             current_loss = losses["total_loss"].item()
             loss_history.append(current_loss)
 
-            # Print progress
-            if epoch % print_every == 0:
+            if use_tqdm:
+                progress.set_postfix(
+                    total=losses["total_loss"].item(),
+                    pde=losses["pde_loss"].item(),
+                    boundary=losses["boundary_loss"].item(),
+                )
+            elif epoch % print_every == 0:
                 print(
                     f"{epoch:5d} - {losses['total_loss'].item():.6f} - "
                     f"{losses['pde_loss'].item():.6f} - {losses['boundary_loss'].item():.6f}"
@@ -89,7 +107,7 @@ class StandardStrategy(TrainingStrategy):
                 break
 
         elapsed = time.time() - start_time
-        networks.eval()
+        model.eval()
 
         return {
             "loss_history": loss_history,
@@ -103,33 +121,33 @@ class StandardStrategy(TrainingStrategy):
 
     @staticmethod
     def __compute_pde_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         collocation_points: torch.Tensor,
     ) -> torch.Tensor:
         """Compute PDE residual loss"""
         coords = collocation_points.clone().detach().requires_grad_(True)
-        u_pred = networks.forward(coords)
+        u_pred = model.forward(coords)
 
         # Use the problem's residual function
         residual = problem.compute_residual(coords, u_pred)
         target = torch.zeros_like(residual)
 
-        return networks.mse_loss(residual, target)
+        return model.mse_loss(residual, target)
 
     @staticmethod
     def __compute_boundary_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         boundary_points: torch.Tensor,
         boundary_values: torch.Tensor,
     ) -> torch.Tensor:
         """Compute boundary condition loss"""
-        u_pred = networks.forward(boundary_points)
-        return networks.mse_loss(u_pred, boundary_values)
+        u_pred = model.forward(boundary_points)
+        return model.mse_loss(u_pred, boundary_values)
 
     @staticmethod
     def __compute_total_loss(
-        networks: NeuralNet,
+        model: NeuralNet,
         problem: PDEProblem,
         collocation_points: torch.Tensor,
         boundary_points: torch.Tensor,
@@ -138,10 +156,10 @@ class StandardStrategy(TrainingStrategy):
     ) -> Dict[str, torch.Tensor]:
         """Compute total weighted loss"""
         pde_loss = StandardStrategy.__compute_pde_loss(
-            networks, problem, collocation_points
+            model, problem, collocation_points
         )
         boundary_loss = StandardStrategy.__compute_boundary_loss(
-            networks, boundary_points, boundary_values
+            model, boundary_points, boundary_values
         )
         total_loss = bc_weight * boundary_loss + pde_loss
 
@@ -155,7 +173,7 @@ class StandardStrategy(TrainingStrategy):
 class AdaptiveSamplingStrategy(TrainingStrategy):
     """Adaptive sampling training strategy - placeholder"""
 
-    def train(self, **kwargs) -> Dict[str, Any]:
+    def train(self, **kwargs: Any) -> Dict[str, Any]:
         """Placeholder for adaptive sampling"""
         print("Adaptive sampling strategy not yet implemented")
         # Fall back to standard strategy for now

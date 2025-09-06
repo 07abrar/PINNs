@@ -1,5 +1,7 @@
+"""Geometric domain definitions used for training PINNs."""
+
 from abc import ABC, abstractmethod
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import shapely.geometry as sg
@@ -28,7 +30,7 @@ class Domain(ABC):
         """Create mask for visualization (True = inside domain)"""
 
     @abstractmethod
-    def training_data_plot(self, save_path: str = None) -> None:
+    def training_data_plot(self, save_path: str | None = None) -> None:
         """Plot training data points"""
 
 
@@ -39,8 +41,8 @@ class CircularDomain(Domain):
         self,
         center: Tuple[float, float] = (0, 0),
         radius: float = 1.0,
-        training_data: dict = None,
-    ):
+        training_data: Dict[str, int] | None = None,
+    ) -> None:
         if training_data is None:
             training_data = {"boundary": 100, "collocation": 1000}
         self.training_data = training_data
@@ -86,7 +88,7 @@ class CircularDomain(Domain):
         dy = y_grid - self.center[1]
         return (dx**2 + dy**2) <= self.radius**2
 
-    def training_data_plot(self, save_path: str = None) -> None:
+    def training_data_plot(self, save_path: str | None = None) -> None:
         """Plot training data points"""
         training_data_plot(
             self.boundary_points,
@@ -100,8 +102,10 @@ class PolygonDomain(Domain):
     """Polygon domain using Shapely for geometry operations"""
 
     def __init__(
-        self, vertices: List[Tuple[float, float]], training_data: dict = None
-    ):
+        self,
+        vertices: List[Tuple[float, float]],
+        training_data: Dict[str, int] | None = None,
+    ) -> None:
         """
         Initialize polygon from vertices
         vertices: [(x1,y1), (x2,y2), ..., (xn,yn)]
@@ -201,7 +205,7 @@ class PolygonDomain(Domain):
 
         return mask
 
-    def training_data_plot(self, save_path: str = None) -> None:
+    def training_data_plot(self, save_path: str | None = None) -> None:
         """Plot training data points"""
         training_data_plot(
             self.boundary_points,
@@ -218,8 +222,8 @@ class RectangularDomain(Domain):
         self,
         x_range: Tuple[float, float],
         y_range: Tuple[float, float],
-        training_data: dict = None,
-    ):
+        training_data: Dict[str, int] | None = None,
+    ) -> None:
         if training_data is None:
             training_data = {"boundary": 100, "collocation": 1000}
         self.x_range = x_range
@@ -321,7 +325,7 @@ class RectangularDomain(Domain):
             & (y_grid <= self.y_range[1])
         )
 
-    def training_data_plot(self, save_path: str = None) -> None:
+    def training_data_plot(self, save_path: str | None = None) -> None:
         """Plot training data points"""
         training_data_plot(
             self.boundary_points,

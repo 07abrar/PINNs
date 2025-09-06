@@ -8,7 +8,7 @@ from torch import autograd
 import src as pinns
 
 
-def my_pde_residual(coords, u_pred):
+def my_pde_residual(coords: torch.Tensor, u_pred: torch.Tensor) -> torch.Tensor:
     """
     Compute the residual of the 2D p-Laplacian Poisson equation
 
@@ -81,7 +81,7 @@ problem = pinns.PDEProblem(
 )
 
 # 3. Create PINN (network + loss only)
-networks = pinns.NeuralNet(
+model = pinns.NeuralNet(
     input_dim=2,
     hidden_dim=50,
     output_dim=1,
@@ -91,15 +91,14 @@ networks = pinns.NeuralNet(
 
 # 4. Create trainer with strategy
 trainer = pinns.Trainer(
-    networks=networks,
+    model=model,
     problem=problem,
     domain=domain,
     optimizer_config={"type": "adam", "lr": 1e-2},
     strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
 )
-
 # 5. Train
-results = trainer.train(epochs=1000, loss_threshold=1e-4)
+results = trainer.train(epochs=1000, loss_threshold=1e-4, use_tqdm=True)
 
 # 6. Fix later
 
@@ -109,11 +108,11 @@ x = np.linspace(-1, 1, n)
 y = np.linspace(-1, 1, n)
 X, Y = np.meshgrid(x, y)
 XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=networks.dtype).to(networks.device)
+XY_tensor = torch.tensor(XY, dtype=model.dtype).to(model.device)
 
 # Predict using the trained model
 with torch.no_grad():
-    u_pred = networks.forward(XY_tensor).cpu().numpy().reshape(n, n)
+    u_pred = model.forward(XY_tensor).cpu().numpy().reshape(n, n)
 
 # Compute the real solution
 p = 2.0  # Make sure this matches your PDE
@@ -134,7 +133,7 @@ os.makedirs(save_dir, exist_ok=True)
 # optimizer_type = getattr(trainer.optimizer, "adam")
 optimizer_type = "adam"
 save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
-torch.save(networks.state_dict(), save_model_path)
+torch.save(model.state_dict(), save_model_path)
 print(f"Model saved to {save_model_path}")
 
 # Loss curve
@@ -163,3 +162,4 @@ pinns.prediction_and_error(
     dpi=450,
     show=False,
 )
+
