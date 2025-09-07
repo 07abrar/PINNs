@@ -22,11 +22,16 @@ class Trainer:
         optimizer_config: Dict[str, Any],
         strategy: Union[str, TrainingStrategy] = "standard",
         experiment_config: Optional[ExperimentConfig] = None,
+        checkpoint_path: Optional[str] = None,
+        checkpoint_interval: int = 1,
     ) -> None:
         self.model = model
         self.problem = problem
         self.domain = domain
         self.experiment_config = experiment_config or ExperimentConfig()
+        self.checkpoint_path = checkpoint_path
+        self.checkpoint_interval = checkpoint_interval
+        self._best_loss = float("inf")
 
         self._create_optimizer(optimizer_config)
 
@@ -85,6 +90,15 @@ class Trainer:
             device=self.model.device,
         )
 
+        def epoch_callback(epoch: int, loss_val: float) -> None:
+            if self.checkpoint_path is None:
+                return
+            if epoch % self.checkpoint_interval != 0:
+                return
+            if loss_val < self._best_loss:
+                torch.save(self.model.state_dict(), self.checkpoint_path)
+                self._best_loss = loss_val
+
         # Execute training strategy
         return self.strategy.train(
             model=self.model,
@@ -96,5 +110,6 @@ class Trainer:
             epochs=epochs,
             loss_threshold=loss_threshold,
             bc_weight=bc_weight,
+            epoch_callback=epoch_callback,
             **kwargs,
         )
