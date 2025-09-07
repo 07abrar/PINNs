@@ -1,14 +1,19 @@
 from datetime import datetime
 import os
 
-import numpy as np
 import torch
 from torch import autograd
 
 import src as pinns
 
+# Create directory to save results
+current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
+os.makedirs(save_dir, exist_ok=True)
 
-def my_pde_residual(coords, u_pred):
+
+def my_pde_residual(coords: torch.Tensor, u_pred: torch.Tensor) -> torch.Tensor:
     """
     Compute the residual of the 2D p-Laplacian Poisson equation
 
@@ -64,16 +69,17 @@ def my_pde_residual(coords, u_pred):
 
 
 # 1. Define domain
-domain = pinns.CircularDomain(
-    center=(0, 0),
-    radius=1,
-    training_data={"boundary": 100, "collocation": 1000},
-)
+# domain = pinns.CircularDomain(
+#     center=(0, 0),
+#     radius=1,
+#     training_data={"boundary": 100, "collocation": 1000},
+# )
 # or
 # domain = pinns.PolygonDomain(vertices=[(0, 0), (1, 1), (1, 0)])
-# domain = pinns.RectangularDomain(x_range=(0, 1), y_range=(0, 1))
+domain = pinns.RectangularDomain(x_range=(0, 1), y_range=(0, 1))
 
-domain.training_data_plot()
+save_training_data_plot_path = os.path.join(save_dir, "training_data_plot.png")
+domain.training_data_plot(save_path=save_training_data_plot_path)
 
 # 2. Define problem
 problem = pinns.PDEProblem(
@@ -81,62 +87,32 @@ problem = pinns.PDEProblem(
 )
 
 # 3. Create PINN (network + loss only)
-networks = pinns.NeuralNet(
+state_dict_path = r"saved_model_and_graph\20250907-170048\model_p3.pt"
+model = pinns.NeuralNet(
     input_dim=2,
-    hidden_dim=50,
+    hidden_dim=80,
     output_dim=1,
     num_hidden_layers=4,
     activation="tanh",
+    state_dict_path=state_dict_path,
 )
 
 # 4. Create trainer with strategy
+save_model_path = os.path.join(save_dir, "model.pt")
 trainer = pinns.Trainer(
-    networks=networks,
+    model=model,
     problem=problem,
     domain=domain,
     optimizer_config={"type": "adam", "lr": 1e-2},
     strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
+    save_path=save_model_path,
+    checkpoint_interval=100,
 )
 
 # 5. Train
-results = trainer.train(epochs=1000, loss_threshold=1e-4)
+results = trainer.train(epochs=2000, loss_threshold=1e-4)
 
-# 6. Fix later
-
-# Define a grid over input domain
-n = 100  # grid resolution
-x = np.linspace(-1, 1, n)
-y = np.linspace(-1, 1, n)
-X, Y = np.meshgrid(x, y)
-XY = np.stack([X.ravel(), Y.ravel()], axis=1)
-XY_tensor = torch.tensor(XY, dtype=networks.dtype).to(networks.device)
-
-# Predict using the trained model
-with torch.no_grad():
-    u_pred = networks.forward(XY_tensor).cpu().numpy().reshape(n, n)
-
-# Compute the real solution
-p = 2.0  # Make sure this matches your PDE
-N = 2
-C = (p - 1) / p * N ** (1 / (1 - p))
-u_real = np.zeros_like(X)
-u_real[:, :] = C * (1 - np.sqrt(X[:, :] ** 2 + Y[:, :] ** 2) ** (p / (p - 1)))
-
-circular_mask = domain.visualization_mask(X, Y)
-
-# Use visualization helpers for plotting and saving
-current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-save_dir = os.path.join(repo_root, "saved_model_and_graph", current_time)
-os.makedirs(save_dir, exist_ok=True)
-
-# Save the model
-# optimizer_type = getattr(trainer.optimizer, "adam")
-optimizer_type = "adam"
-save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
-torch.save(networks.state_dict(), save_model_path)
-print(f"Model saved to {save_model_path}")
-
+# 6. Visualization
 # Loss curve
 save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
 pinns.loss_curve(
@@ -147,19 +123,26 @@ pinns.loss_curve(
     dpi=150,
 )
 
-# Predictions and error figure
-save_predictions_path = os.path.join(save_dir, "predictions_and_error.png")
-pinns.prediction_and_error(
-    X=X,
-    Y=Y,
-    u_pred=u_pred,
-    u_real=u_real,
-    mask=circular_mask,
-    save_path=save_predictions_path,
-    cmap_pred="hsv",
-    cmap_real="hsv",
-    cmap_err="inferno",
-    levels=50,
+# Prediction surface
+save_surface_path = os.path.join(save_dir, "prediction_surface.png")
+pinns.prediction_surface(
+    model=model,
+    domain=domain,
+    plot_type="2d",
+    save_path=save_surface_path,
+    cmap="hsv",
+    dpi=450,
+    show=False,
+)
+
+# Domain loss heatmap
+save_domain_loss_path = os.path.join(save_dir, "domain_loss_heatmap.png")
+pinns.domain_loss_heatmap(
+    model=model,
+    problem=problem,
+    domain=domain,
+    save_path=save_domain_loss_path,
+    cmap="inferno",
     dpi=450,
     show=False,
 )
