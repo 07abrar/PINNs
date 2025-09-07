@@ -45,6 +45,7 @@ class StandardStrategy(TrainingStrategy):
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
+        epoch_callback: Any | None = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Standard training loop"""
@@ -88,6 +89,9 @@ class StandardStrategy(TrainingStrategy):
             # Record loss
             val = losses["total_loss"].item()
             loss_history.append(val)
+
+            if epoch_callback is not None:
+                epoch_callback(epoch, val)
 
             # EMA for stable display + stopping
             ema = val if ema is None else (
