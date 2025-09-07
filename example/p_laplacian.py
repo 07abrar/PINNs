@@ -87,34 +87,32 @@ problem = pinns.PDEProblem(
 )
 
 # 3. Create PINN (network + loss only)
+state_dict_path = r"saved_model_and_graph\20250907-170048\model_p3.pt"
 model = pinns.NeuralNet(
     input_dim=2,
-    hidden_dim=50,
+    hidden_dim=80,
     output_dim=1,
     num_hidden_layers=4,
     activation="tanh",
+    state_dict_path=state_dict_path,
 )
 
 # 4. Create trainer with strategy
+save_model_path = os.path.join(save_dir, "model.pt")
 trainer = pinns.Trainer(
     model=model,
     problem=problem,
     domain=domain,
     optimizer_config={"type": "adam", "lr": 1e-2},
     strategy="standard",  # or pinns.AdaptiveSamplingStrategy()
+    save_path=save_model_path,
+    checkpoint_interval=100,
 )
+
 # 5. Train
-results = trainer.train(epochs=2500, loss_threshold=1e-4)
+results = trainer.train(epochs=2000, loss_threshold=1e-4)
 
-# 6. Visualization and saving
-
-# Save the model
-# optimizer_type = getattr(trainer.optimizer, "adam")
-optimizer_type = "adam"
-save_model_path = os.path.join(save_dir, f"{optimizer_type}.pt")
-torch.save(model.state_dict(), save_model_path)
-print(f"Model saved to {save_model_path}")
-
+# 6. Visualization
 # Loss curve
 save_loss_graph = os.path.join(save_dir, "loss_function_graph.png")
 pinns.loss_curve(
