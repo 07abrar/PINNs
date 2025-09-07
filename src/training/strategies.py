@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 import math
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 
 import torch
@@ -45,7 +45,7 @@ class StandardStrategy(TrainingStrategy):
         epochs: int = 1000,
         loss_threshold: float = 1e-4,
         bc_weight: float = 10.0,
-        epoch_callback: Any | None = None,
+        epoch_callback: Callable | None = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Standard training loop"""
@@ -126,6 +126,10 @@ class StandardStrategy(TrainingStrategy):
                 break
 
         pbar.close()
+
+        # Final evaluation
+        if epoch_callback is not None:
+            epoch_callback(0, val)
 
         elapsed = time.time() - start_time
         model.eval()
